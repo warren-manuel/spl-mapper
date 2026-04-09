@@ -1,0 +1,4 @@
+dtap, diphtheria tetanus acellular pertussis
+ipv, inactivated poliovirus vaccine
+hep b => hepatitis b
+mmr, measles mumps rubella

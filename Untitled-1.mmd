@@ -1,0 +1,57 @@
+---
+query: >-
+  My scripts are to be run in order as follows: 
+
+  1. multi_gpu_contra_extract.py 
+
+  2. hyb_mapper.py 
+
+  3. map_verify.py 
+
+  4. prefilter.py 
+
+  5. postcord.py 
+
+  5. result_agg.py 
+
+  Analazyle these files and visualize the end-to end workflow starting from the
+  raw text extraction to the final mapping of the concepts (both direct and
+  post-coordinated).
+references:
+  - "File: /multi_gpu_contra_extract.py"
+  - "File: /hyb_mapper.py"
+  - "File: /prefilter.py"
+  - "File: /map_verify.py"
+  - "File: /postcord.py"
+  - "File: /result_agg.py"
+generationTime: 2026-03-04T16:07:31.365Z
+---
+flowchart TD
+    A[Raw CONTRA_TEXT CSV] --> B[multi_gpu_contra_extract.py<br>LLM extraction (multi-GPU)]
+    B -->|out_gpu*.jsonl| C[hyb_mapper.py<br>SNOMED candidate mapping<br>(dense+BM25 search)]
+    C -->|mapped_snomed_hits.jsonl| D[map_verify.py<br>Direct SNOMED match verification<br>(LLM)]
+    D -->|verified_hits.jsonl| E[prefilter.py<br>Precompute ECL range membership]
+    C --> E
+    D --> F[postcord.py<br>Post-coordination for unmatched items<br>(LLM, ECL filtering)]
+    E --> F
+    F -->|postcoord_hits.jsonl| G[result_agg.py<br>Aggregate verified + postcoord results]
+    D --> G
+    G -->|aggregated_hits.jsonl / .csv| H[Final Output:<br>Direct & Post-coordinated SNOMED mappings]
+
+    %% Data flow annotations
+    subgraph Extraction
+        A
+        B
+    end
+    subgraph Mapping
+        C
+        D
+    end
+    subgraph Filtering & Coordination
+        E
+        F
+    end
+    subgraph Aggregation
+        G
+        H
+    end

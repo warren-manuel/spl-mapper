@@ -1,0 +1,46 @@
+# -------------------------------------------
+#  environment.yml  –  VaxMapper GPU stack
+#  (CUDA 12.1 wheels, Torch 2.7.1, widgets fix)
+# -------------------------------------------
+name: vaxmapper
+channels:
+  - nvidia          # pytorch-cuda & faiss for CUDA 12
+  - pytorch         # official PyTorch 2.7.x builds
+  - conda-forge
+dependencies:
+  # ---- core Python ----
+  - python=3.10
+  - pip
+
+  # ---- PyTorch 2.7.1 + CUDA 12.1 ----
+  - pytorch=2.7.*
+  - pytorch-cuda=12.1
+  - torchvision=0.22.*
+  - torchaudio=2.7.*
+
+  # ---- Embeddings + LLM tooling ----
+  - sentence-transformers
+  - transformers>=4.40
+  - accelerate
+  - peft
+  - bitsandbytes                # 4-/8-bit quant support
+
+  # ---- Similarity search ----
+  - faiss-gpu=1.7.5             # CUDA-12 build; falls back to CPU if GPU busy
+
+  # ---- Data / utils ----
+  - numpy
+  - pandas
+  - tqdm
+
+  # ---- Jupyter & widgets ----
+  - jupyterlab=4.*              
+  - ipykernel
+  - ipywidgets=8.*              # widget runtime
+  - jupyterlab-widgets          # JS side for Lab 4
+  - widgetsnbextension          # classic-notebook widget support
+  - nodejs                      # builds extensions where needed
+
+  # ---- Extras installed via pip ----
+  - pip:
+      - ollama-python           # talk to a local Ollama daemon

@@ -1,0 +1,28 @@
+flowchart TD
+    A["Raw contraindication text CSV<br/>(index_col + text_col)"] --> B["multi_gpu_contra_extract.py<br/>LLM extracts atomic contraindication items"]
+    B --> C["out_gpu0..N.jsonl<br/>(parsed_json.items per SPL row)"]
+
+    C --> D["hyb_mapper.py<br/>Flatten items + hybrid retrieval<br/>(dense FAISS + BM25 Elasticsearch)"]
+    D --> E["mapped_hits.jsonl<br/>Per item:<br/>ci_text_terms, condition_text_terms,<br/>substance_text_terms, severity_span_terms, course_span_terms"]
+
+    E --> F["map_verify.py<br/>Direct-match verifier LLM<br/>uses ci_text_terms only"]
+    F --> G["verified_hits.jsonl<br/>selected_snomed_id or N/A"]
+
+    E --> H["prefilter.py<br/>Precompute ECL range membership cache<br/>for attribute values"]
+    H --> I["prefilter_cache.json"]
+
+    G --> J{selected_snomed_id == N/A?}
+    J -- No --> K["Direct mapping accepted"]
+    J -- Yes --> L["postcord.py<br/>Post-coordinate mapper LLM<br/>focus=condition_text_terms<br/>fills=substance/severity/course terms"]
+    I --> L
+    E --> L
+    G --> L
+
+    L --> M["postcoord_hits.jsonl<br/>selected_focus_id + fills"]
+
+    K --> N["result_agg.py<br/>merge by SPL_SET_ID + item_index"]
+    M --> N
+    G --> N
+
+    N --> O["aggregated_hits.jsonl<br/>(grouped by SPL_SET_ID,<br/>final direct or postcoordinated mapping)"]
+    N --> P["aggregated_hits.csv<br/>(item-level flattened output)"]

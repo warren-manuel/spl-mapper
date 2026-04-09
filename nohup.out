@@ -1,0 +1,447 @@
+[1/7] CONTRA extraction
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1170, in from_pretrained
+    config_class = CONFIG_MAPPING[config_dict["model_type"]]
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 872, in __getitem__
+    raise KeyError(key)
+KeyError: 'qwen3_5_moe'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 212, in load_model_local
+    model = AutoModelForCausalLM.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py", line 531, in from_pretrained
+    config, kwargs = AutoConfig.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1172, in from_pretrained
+    raise ValueError(
+ValueError: The checkpoint you are trying to load has model type `qwen3_5_moe` but Transformers does not recognize this architecture. This could be because of an issue with the checkpoint, or because your version of Transformers is out of date.
+
+You can update Transformers with the command `pip install --upgrade transformers`. If this does not work, and the checkpoint is very new, then there may not be a release version that supports this model yet. In this case, you can get the most up-to-date code by installing Transformers from source with the command `pip install git+https://github.com/huggingface/transformers.git`
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1170, in from_pretrained
+    config_class = CONFIG_MAPPING[config_dict["model_type"]]
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 872, in __getitem__
+    raise KeyError(key)
+KeyError: 'qwen3_5_moe'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 212, in load_model_local
+    model = AutoModelForCausalLM.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py", line 531, in from_pretrained
+    config, kwargs = AutoConfig.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1172, in from_pretrained
+    raise ValueError(
+ValueError: The checkpoint you are trying to load has model type `qwen3_5_moe` but Transformers does not recognize this architecture. This could be because of an issue with the checkpoint, or because your version of Transformers is out of date.
+
+You can update Transformers with the command `pip install --upgrade transformers`. If this does not work, and the checkpoint is very new, then there may not be a release version that supports this model yet. In this case, you can get the most up-to-date code by installing Transformers from source with the command `pip install git+https://github.com/huggingface/transformers.git`
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 492, in <module>
+    main()
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 486, in main
+    raise RuntimeError(f"A worker process exited with code {p.exitcode}")
+RuntimeError: A worker process exited with code 1
+[1/7] CONTRA extraction
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1360, in from_pretrained
+    config_class = CONFIG_MAPPING[config_dict["model_type"]]
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1048, in __getitem__
+    raise KeyError(key)
+KeyError: 'qwen3_5_moe'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 212, in load_model_local
+    model = AutoModelForCausalLM.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py", line 549, in from_pretrained
+    config, kwargs = AutoConfig.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1362, in from_pretrained
+    raise ValueError(
+ValueError: The checkpoint you are trying to load has model type `qwen3_5_moe` but Transformers does not recognize this architecture. This could be because of an issue with the checkpoint, or because your version of Transformers is out of date.
+
+You can update Transformers with the command `pip install --upgrade transformers`. If this does not work, and the checkpoint is very new, then there may not be a release version that supports this model yet. In this case, you can get the most up-to-date code by installing Transformers from source with the command `pip install git+https://github.com/huggingface/transformers.git`
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1360, in from_pretrained
+    config_class = CONFIG_MAPPING[config_dict["model_type"]]
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1048, in __getitem__
+    raise KeyError(key)
+KeyError: 'qwen3_5_moe'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 212, in load_model_local
+    model = AutoModelForCausalLM.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/auto_factory.py", line 549, in from_pretrained
+    config, kwargs = AutoConfig.from_pretrained(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/models/auto/configuration_auto.py", line 1362, in from_pretrained
+    raise ValueError(
+ValueError: The checkpoint you are trying to load has model type `qwen3_5_moe` but Transformers does not recognize this architecture. This could be because of an issue with the checkpoint, or because your version of Transformers is out of date.
+
+You can update Transformers with the command `pip install --upgrade transformers`. If this does not work, and the checkpoint is very new, then there may not be a release version that supports this model yet. In this case, you can get the most up-to-date code by installing Transformers from source with the command `pip install git+https://github.com/huggingface/transformers.git`
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 492, in <module>
+    main()
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 486, in main
+    raise RuntimeError(f"A worker process exited with code {p.exitcode}")
+RuntimeError: A worker process exited with code 1
+[1/7] CONTRA extraction
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:01<00:19,  1.92s/it]Loading checkpoint shards:   9%|▉         | 1/11 [00:01<00:16,  1.65s/it]Loading checkpoint shards:  18%|█▊        | 2/11 [00:03<00:16,  1.89s/it]Loading checkpoint shards:  18%|█▊        | 2/11 [00:03<00:16,  1.78s/it]Loading checkpoint shards:  27%|██▋       | 3/11 [00:05<00:15,  1.89s/it]Loading checkpoint shards:  27%|██▋       | 3/11 [00:05<00:14,  1.83s/it]Loading checkpoint shards:  36%|███▋      | 4/11 [00:07<00:13,  1.89s/it]Loading checkpoint shards:  36%|███▋      | 4/11 [00:07<00:12,  1.86s/it]Loading checkpoint shards:  45%|████▌     | 5/11 [00:09<00:11,  1.89s/it]Loading checkpoint shards:  45%|████▌     | 5/11 [00:09<00:11,  1.86s/it]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:10<00:09,  1.83s/it]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:11<00:09,  1.96s/it]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:13<00:07,  1.91s/it]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:13<00:07,  1.93s/it]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:15<00:05,  1.92s/it]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:15<00:05,  1.94s/it]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:16<00:03,  1.89s/it]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:17<00:03,  1.99s/it]Loading checkpoint shards:  91%|█████████ | 10/11 [00:19<00:01,  1.91s/it]Loading checkpoint shards:  91%|█████████ | 10/11 [00:18<00:01,  1.95s/it]Loading checkpoint shards: 100%|██████████| 11/11 [00:20<00:00,  1.83s/it]Loading checkpoint shards: 100%|██████████| 11/11 [00:20<00:00,  1.86s/it]
+Loading checkpoint shards: 100%|██████████| 11/11 [00:21<00:00,  1.90s/it]Loading checkpoint shards: 100%|██████████| 11/11 [00:21<00:00,  1.91s/it]
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+[1/7] CONTRA extraction
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:08,  1.19it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:09,  1.00it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:07,  1.17it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:02<00:09,  1.07s/it]Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:05,  1.49it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:02<00:00,  4.91it/s]
+Some parameters are on the meta device because they were offloaded to the cpu.
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 224, in load_model_local
+    model.resize_token_embeddings(len(tok))
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3209, in resize_token_embeddings
+    model_embeds = self._resize_token_embeddings(new_num_tokens, pad_to_multiple_of, mean_resizing)
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3234, in _resize_token_embeddings
+    new_embeddings = self._get_resized_embeddings(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3361, in _get_resized_embeddings
+    new_embeddings = nn.Embedding(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 167, in __init__
+    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.63 GiB. GPU 0 has a total capacity of 79.25 GiB of which 2.23 GiB is free. Process 1922330 has 64.66 GiB memory in use. Including non-PyTorch memory, this process has 12.26 GiB memory in use. Of the allocated memory 11.85 GiB is allocated by PyTorch, and 1.49 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.20it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:02<00:00,  3.98it/s]
+Some parameters are on the meta device because they were offloaded to the cpu.
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 224, in load_model_local
+    model.resize_token_embeddings(len(tok))
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3209, in resize_token_embeddings
+    model_embeds = self._resize_token_embeddings(new_num_tokens, pad_to_multiple_of, mean_resizing)
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3234, in _resize_token_embeddings
+    new_embeddings = self._get_resized_embeddings(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3361, in _get_resized_embeddings
+    new_embeddings = nn.Embedding(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 167, in __init__
+    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.63 GiB. GPU 0 has a total capacity of 79.25 GiB of which 2.22 GiB is free. Process 1922331 has 64.65 GiB memory in use. Including non-PyTorch memory, this process has 12.26 GiB memory in use. Of the allocated memory 11.85 GiB is allocated by PyTorch, and 1.49 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 492, in <module>
+    main()
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 486, in main
+    raise RuntimeError(f"A worker process exited with code {p.exitcode}")
+RuntimeError: A worker process exited with code 1
+[1/7] CONTRA extraction
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:09,  1.10it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:08,  1.20it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:09,  1.10it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:08,  1.06it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:07,  1.18it/s]Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.32it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:08,  1.10it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:02<00:00,  4.40it/s]
+Some parameters are on the meta device because they were offloaded to the cpu.
+Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.18it/s]Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 354, in load_model_local
+    model.resize_token_embeddings(len(tok))
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3209, in resize_token_embeddings
+    model_embeds = self._resize_token_embeddings(new_num_tokens, pad_to_multiple_of, mean_resizing)
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3234, in _resize_token_embeddings
+    new_embeddings = self._get_resized_embeddings(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3361, in _get_resized_embeddings
+    new_embeddings = nn.Embedding(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 167, in __init__
+    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.63 GiB. GPU 0 has a total capacity of 79.25 GiB of which 2.22 GiB is free. Process 1922331 has 64.66 GiB memory in use. Including non-PyTorch memory, this process has 12.26 GiB memory in use. Of the allocated memory 11.85 GiB is allocated by PyTorch, and 1.49 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:05,  1.44it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:02<00:00,  4.69it/s]
+Some parameters are on the meta device because they were offloaded to the cpu.
+Process SpawnProcess-1:
+Traceback (most recent call last):
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 354, in worker_run
+    model = load_model_local(model_id)
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/llm.py", line 354, in load_model_local
+    model.resize_token_embeddings(len(tok))
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3209, in resize_token_embeddings
+    model_embeds = self._resize_token_embeddings(new_num_tokens, pad_to_multiple_of, mean_resizing)
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3234, in _resize_token_embeddings
+    new_embeddings = self._get_resized_embeddings(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/transformers/modeling_utils.py", line 3361, in _get_resized_embeddings
+    new_embeddings = nn.Embedding(
+  File "/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/site-packages/torch/nn/modules/sparse.py", line 167, in __init__
+    torch.empty((num_embeddings, embedding_dim), **factory_kwargs),
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 2.63 GiB. GPU 0 has a total capacity of 79.25 GiB of which 2.23 GiB is free. Process 1922330 has 64.66 GiB memory in use. Including non-PyTorch memory, this process has 12.26 GiB memory in use. Of the allocated memory 11.85 GiB is allocated by PyTorch, and 1.49 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Loading checkpoint shards:  36%|███▋      | 4/11 [00:03<00:06,  1.16it/s]Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 492, in <module>
+    main()
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 486, in main
+    raise RuntimeError(f"A worker process exited with code {p.exitcode}")
+RuntimeError: A worker process exited with code 1
+Loading checkpoint shards:  45%|████▌     | 5/11 [00:04<00:05,  1.16it/s]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:05<00:04,  1.18it/s]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:05<00:03,  1.17it/s]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:06<00:02,  1.18it/s]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:07<00:01,  1.17it/s]Loading checkpoint shards:  91%|█████████ | 10/11 [00:08<00:00,  1.17it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.20it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.18it/s]
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 492, in <module>
+    
+  File "/data/wmanuel3/VaxMapperRepo/multi_gpu_contra_extract.py", line 486, in main
+    for p in procs:
+RuntimeError: A worker process exited with code -15
+/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 2 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+/home/srv-wmanuel3/miniconda3/envs/vaxmapper/lib/python3.10/multiprocessing/resource_tracker.py:224: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+[1/7] CONTRA extraction
+`torch_dtype` is deprecated! Use `dtype` instead!
+[extract] physical_gpu=0 visible_devices=0
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:08,  1.23it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:07,  1.22it/s]Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.22it/s]Loading checkpoint shards:  36%|███▋      | 4/11 [00:03<00:05,  1.21it/s]Loading checkpoint shards:  45%|████▌     | 5/11 [00:04<00:04,  1.21it/s]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:04<00:04,  1.21it/s]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:05<00:03,  1.21it/s]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:06<00:02,  1.21it/s]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:07<00:01,  1.20it/s]Loading checkpoint shards:  91%|█████████ | 10/11 [00:08<00:00,  1.20it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.24it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.22it/s]
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+Done. Wrote 1 shard files to: results/20260317_medgemma
+[2/7] Mapper
+Starting Elasticsearch from /data/wmanuel3/VaxMapperRepo/esdata/elasticsearch-9.0.0/bin/elasticsearch: on port 9200...
+Elasticsearch is running: 9.0.0
+Deleting existing index: snomed_ct_es_index
+Creating index 'snomed_ct_es_index'...
+Loading model tavakolih/all-MiniLM-L6-v2-pubmed-full...
+Model tavakolih/all-MiniLM-L6-v2-pubmed-full loaded to cuda:0 successfully.
+Moving FAISS index to GPU (device 0)...
+Index moved to GPU successfully.
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/hyb_mapper.py", line 141, in <module>
+    main()
+  File "/data/wmanuel3/VaxMapperRepo/hyb_mapper.py", line 116, in main
+    pred_df = read_predictions_jsonl_files(
+  File "/data/wmanuel3/VaxMapperRepo/VaxMapper/src/utils/hyb_mapper.py", line 159, in read_predictions_jsonl_files
+    with open(path, "r", encoding="utf-8") as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'results/20260317_medgemma/out_gpu1.jsonl'
+[2/7] Mapper
+Starting Elasticsearch from /data/wmanuel3/VaxMapperRepo/esdata/elasticsearch-9.0.0/bin/elasticsearch: on port 9200...
+Elasticsearch is running: 9.0.0
+Deleting existing index: snomed_ct_es_index
+Creating index 'snomed_ct_es_index'...
+Loading model tavakolih/all-MiniLM-L6-v2-pubmed-full...
+Model tavakolih/all-MiniLM-L6-v2-pubmed-full loaded to cuda:0 successfully.
+Moving FAISS index to GPU (device 0)...
+Index moved to GPU successfully.
+Wrote 388 records to results/20260317_medgemma/mapped_hits.jsonl
+[3/7] Map verifier
+`torch_dtype` is deprecated! Use `dtype` instead!
+[map_verify] worker=0 physical_gpu=0 visible_devices=0
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:08,  1.19it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:07,  1.20it/s]Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.20it/s]Loading checkpoint shards:  36%|███▋      | 4/11 [00:03<00:05,  1.19it/s]Loading checkpoint shards:  45%|████▌     | 5/11 [00:04<00:05,  1.19it/s]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:05<00:04,  1.20it/s]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:05<00:03,  1.19it/s]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:06<00:02,  1.20it/s]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:07<00:01,  1.19it/s]Loading checkpoint shards:  91%|█████████ | 10/11 [00:08<00:00,  1.19it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.22it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.20it/s]
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+Using `cache_implementation='hybrid' is deprecated. Please only use one of ('static', 'offloaded_static'), and the layer structure will be inferred automatically.
+[Worker 0 | GPU 0] Starting 388 items
+[Worker 0 | GPU 0] 1/388 (0.3%) elapsed=22.0s
+[Worker 0 | GPU 0] 25/388 (6.4%) elapsed=546.1s
+[Worker 0 | GPU 0] 50/388 (12.9%) elapsed=1092.0s
+[Worker 0 | GPU 0] 75/388 (19.3%) elapsed=1638.4s
+[Worker 0 | GPU 0] 100/388 (25.8%) elapsed=2185.0s
+[Worker 0 | GPU 0] 125/388 (32.2%) elapsed=2731.4s
+[Worker 0 | GPU 0] 150/388 (38.7%) elapsed=3278.1s
+[Worker 0 | GPU 0] 175/388 (45.1%) elapsed=3825.7s
+[Worker 0 | GPU 0] 200/388 (51.5%) elapsed=4373.3s
+[Worker 0 | GPU 0] 225/388 (58.0%) elapsed=4923.0s
+[Worker 0 | GPU 0] 250/388 (64.4%) elapsed=5498.9s
+[Worker 0 | GPU 0] 275/388 (70.9%) elapsed=6072.1s
+[Worker 0 | GPU 0] 300/388 (77.3%) elapsed=6642.0s
+[Worker 0 | GPU 0] 325/388 (83.8%) elapsed=7209.2s
+[Worker 0 | GPU 0] 350/388 (90.2%) elapsed=7783.7s
+[Worker 0 | GPU 0] 375/388 (96.6%) elapsed=8351.0s
+[Worker 0 | GPU 0] 388/388 (100.0%) elapsed=8646.0s
+[GPU 0] Verified 388 items in 8645.97s
+Wrote: results/20260317_medgemma/verified_hits.jsonl
+[4/7] Prefilter
+Traceback (most recent call last):
+  File "/data/wmanuel3/VaxMapperRepo/prefilter.py", line 79, in <module>
+    ecls: List[str],
+NameError: name 'List' is not defined. Did you mean: 'list'?
+[4/7] Prefilter
+[causative_agent] concepts=2667 allowed=1707 http_errors=0
+[severity] concepts=227 allowed=6 http_errors=0
+[clinical_course] concepts=208 allowed=5 http_errors=0
+Wrote prefilter cache: results/20260317_medgemma/prefilter_cache.json
+[5/7] Postcoord
+`torch_dtype` is deprecated! Use `dtype` instead!
+[postcord] worker=0 physical_gpu=0 visible_devices=0
+Loading checkpoint shards:   0%|          | 0/11 [00:00<?, ?it/s]Loading checkpoint shards:   9%|▉         | 1/11 [00:00<00:08,  1.19it/s]Loading checkpoint shards:  18%|█▊        | 2/11 [00:01<00:07,  1.21it/s]Loading checkpoint shards:  27%|██▋       | 3/11 [00:02<00:06,  1.22it/s]Loading checkpoint shards:  36%|███▋      | 4/11 [00:03<00:05,  1.20it/s]Loading checkpoint shards:  45%|████▌     | 5/11 [00:04<00:04,  1.20it/s]Loading checkpoint shards:  55%|█████▍    | 6/11 [00:04<00:04,  1.21it/s]Loading checkpoint shards:  64%|██████▎   | 7/11 [00:05<00:03,  1.21it/s]Loading checkpoint shards:  73%|███████▎  | 8/11 [00:06<00:02,  1.21it/s]Loading checkpoint shards:  82%|████████▏ | 9/11 [00:07<00:01,  1.20it/s]Loading checkpoint shards:  91%|█████████ | 10/11 [00:08<00:00,  1.20it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.23it/s]Loading checkpoint shards: 100%|██████████| 11/11 [00:09<00:00,  1.21it/s]
+The new embeddings will be initialized from a multivariate normal distribution that has old embeddings' mean and covariance. As described in this article: https://nlp.stanford.edu/~johnhew/vocab-expansion.html. To disable this, use `mean_resizing=False`
+Using `cache_implementation='hybrid' is deprecated. Please only use one of ('static', 'offloaded_static'), and the layer structure will be inferred automatically.
+[Worker 0 | GPU 0] Starting 187 items
+[Worker 0 | GPU 0] 1/187 (0.5%) elapsed=28.7s
+[Worker 0 | GPU 0] 25/187 (13.4%) elapsed=675.4s
+[Worker 0 | GPU 0] 50/187 (26.7%) elapsed=1344.5s
+[Worker 0 | GPU 0] 75/187 (40.1%) elapsed=2014.5s
+[Worker 0 | GPU 0] 100/187 (53.5%) elapsed=2684.8s
+[Worker 0 | GPU 0] 125/187 (66.8%) elapsed=3355.7s
+[Worker 0 | GPU 0] 150/187 (80.2%) elapsed=4025.4s
+[Worker 0 | GPU 0] 175/187 (93.6%) elapsed=4696.3s
+[Worker 0 | GPU 0] 187/187 (100.0%) elapsed=5019.2s
+[GPU 0] Processed 187 items in 5019.21s
+Wrote: results/20260317_medgemma/postcoord_hits.jsonl
+[6/7] Aggregate results
+Wrote 100 SPL groups to results/20260317_medgemma/aggregated_hits.jsonl
+Wrote 388 item rows to results/20260317_medgemma/aggregated_hits.csv
+[7/7] Evaluate
+Loading model tavakolih/all-MiniLM-L6-v2-pubmed-full...
+Model tavakolih/all-MiniLM-L6-v2-pubmed-full loaded to cuda:0 successfully.
+{
+  "inputs": {
+    "pred_csv": "results/20260317_medgemma/aggregated_hits.csv",
+    "gold_csv": "results/contra_gold_100_1.csv",
+    "gold_rows_total": 387,
+    "gold_rows_used": 314,
+    "concept_gold_rows_used": 148,
+    "gold_rows_dropped_na_expression": 73,
+    "discard_na_gold_expression": true,
+    "pred_rows": 388,
+    "gold_unique_spl": 100,
+    "semantic_matching_enabled": true,
+    "semantic_matching_unavailable_reasons": [],
+    "alpha": 0.85,
+    "beta": 0.15,
+    "min_pair_score": 0.0
+  },
+  "concept_level": {
+    "tp": 70,
+    "fp": 171,
+    "fn": 78,
+    "precision": 0.29045643153526973,
+    "recall": 0.47297297297297297,
+    "f1": 0.35989717223650386
+  },
+  "attribute_level": {
+    "tp": 209,
+    "fp": 202,
+    "fn": 305,
+    "precision": 0.5085158150851582,
+    "recall": 0.4066147859922179,
+    "f1": 0.4518918918918919
+  }
+}
+Wrote details: results/20260317_medgemma/eval_details.csv
+Pipeline completed successfully.
+[7/7] Evaluate
+Loading model tavakolih/all-MiniLM-L6-v2-pubmed-full...
+Model tavakolih/all-MiniLM-L6-v2-pubmed-full loaded to cuda:0 successfully.
+{
+  "inputs": {
+    "pred_csv": "results/20260317_medgemma/aggregated_hits.csv",
+    "gold_csv": "results/contra_gold_100_1.csv",
+    "gold_rows_total": 387,
+    "gold_rows_used": 314,
+    "concept_gold_rows_used": 148,
+    "gold_rows_dropped_na_expression": 73,
+    "discard_na_gold_expression": true,
+    "pred_rows": 388,
+    "gold_unique_spl": 100,
+    "semantic_matching_enabled": true,
+    "semantic_matching_unavailable_reasons": [],
+    "alpha": 0.85,
+    "beta": 0.15,
+    "min_pair_score": 0.0
+  },
+  "concept_level": {
+    "tp": 70,
+    "fp": 171,
+    "fn": 78,
+    "precision": 0.29045643153526973,
+    "recall": 0.47297297297297297,
+    "f1": 0.35989717223650386
+  },
+  "attribute_level": {
+    "tp": 186,
+    "fp": 202,
+    "fn": 305,
+    "precision": 0.4793814432989691,
+    "recall": 0.3788187372708758,
+    "f1": 0.42320819112627983
+  }
+}
+Wrote details: results/20260317_medgemma/eval_details.csv
+Pipeline completed successfully.
+[7/7] Evaluate
+Loading model tavakolih/all-MiniLM-L6-v2-pubmed-full...
+Model tavakolih/all-MiniLM-L6-v2-pubmed-full loaded to cuda:0 successfully.
+{
+  "inputs": {
+    "pred_csv": "results/20260317_medgemma/aggregated_hits.csv",
+    "gold_csv": "results/contra_gold_100_1.csv",
+    "gold_rows_total": 387,
+    "gold_rows_used": 314,
+    "concept_gold_rows_used": 163,
+    "gold_rows_dropped_na_expression": 73,
+    "discard_na_gold_expression": true,
+    "pred_rows": 388,
+    "gold_unique_spl": 100,
+    "semantic_matching_enabled": true,
+    "semantic_matching_unavailable_reasons": [],
+    "alpha": 0.85,
+    "beta": 0.15,
+    "min_pair_score": 0.0
+  },
+  "concept_level": {
+    "tp": 85,
+    "fp": 180,
+    "fn": 78,
+    "precision": 0.32075471698113206,
+    "recall": 0.5214723926380368,
+    "f1": 0.3971962616822429
+  },
+  "attribute_level": {
+    "tp": 186,
+    "fp": 202,
+    "fn": 305,
+    "precision": 0.4793814432989691,
+    "recall": 0.3788187372708758,
+    "f1": 0.42320819112627983
+  }
+}
+Wrote details: results/20260317_medgemma/eval_details.csv
+Pipeline completed successfully.
