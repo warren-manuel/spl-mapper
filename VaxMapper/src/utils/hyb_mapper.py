@@ -23,7 +23,7 @@ from VaxMapper.src.utils.snomed_utils import load_snomed_dataframes
 
 DEFAULT_ITEM_TERM_KEYS = ("ci_text", "contraindication_state_text", "substance_text", "severity_span", "clinical_course_span")
 
-SNOMED_CT_SETTINGS = {
+SNOMED_CT_SETTINGS_ORIGINAL = {
     "settings": {
         "index": {
             "number_of_shards": 1,
@@ -32,7 +32,7 @@ SNOMED_CT_SETTINGS = {
                 "default": {
                     "type": "BM25",
                     "k1": 1.2,
-                    "b": 0.5, #from 0.75 to reduce length normalization pressure for shorter queries (e.g., single-term queries) which are common in this mapping use case.
+                    "b": 0.75,  # original value before BM25 tuning
                 }
             },
         },
@@ -95,6 +95,11 @@ SNOMED_CT_SETTINGS = {
         }
     },
 }
+
+# Tuned version: b=0.5 reduces length normalization pressure for short queries
+import copy as _copy
+SNOMED_CT_SETTINGS = _copy.deepcopy(SNOMED_CT_SETTINGS_ORIGINAL)
+SNOMED_CT_SETTINGS["settings"]["index"]["similarity"]["default"]["b"] = 0.5
 
 
 @dataclass
@@ -331,6 +336,7 @@ def load_mapper_resources(
     item_term_keys: Sequence[str] = DEFAULT_ITEM_TERM_KEYS,
     reranker_model_id: str = "",
     reranker_device: str = "cpu",
+    bm25_b: float = 0.5,
 ) -> MapperResources:
     es = get_es_client()
     snomed_frames = load_snomed_dataframes(
@@ -338,11 +344,13 @@ def load_mapper_resources(
         description_snapshot_path=description_path,
         snomed_source_dir=snomed_source_dir,
     )
+    index_settings = SNOMED_CT_SETTINGS_ORIGINAL if bm25_b == 0.75 else SNOMED_CT_SETTINGS
     build_es_index(
         es,
         es_index,
         snomed_frames["snomed_complete_df"],
         rebuild_index=rebuild_es_index,
+        index_settings=index_settings,
     )
 
     st_model, faiss_index = build_or_load_faiss_index(
@@ -395,6 +403,7 @@ def get_cached_mapper_resources(
     item_term_keys: Sequence[str] = DEFAULT_ITEM_TERM_KEYS,
     reranker_model_id: str = "",
     reranker_device: str = "cpu",
+    bm25_b: float = 0.5,
 ) -> MapperResources:
     cache_key = (
         snomed_source_dir,
@@ -413,6 +422,7 @@ def get_cached_mapper_resources(
         tuple(item_term_keys),
         reranker_model_id,
         reranker_device,
+        bm25_b,
     )
     resources = _RESOURCE_CACHE.get(cache_key)
     if resources is None:
@@ -433,6 +443,7 @@ def get_cached_mapper_resources(
             item_term_keys=item_term_keys,
             reranker_model_id=reranker_model_id,
             reranker_device=reranker_device,
+            bm25_b=bm25_b,
         )
         _RESOURCE_CACHE[cache_key] = resources
     return resources

@@ -14,7 +14,7 @@ import os
 import sys
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol, Tuple, TypedDict, Union
@@ -61,6 +61,7 @@ from VaxMapper.src.utils.llm_prompt import (
     CONTRA_EXTRACT_SYSTEM_PROMPT,
     CONTRA_EXTRACT_USER_PROMPT,
     DIRECT_VERIFY_SYSTEM_PROMPT,
+    DIRECT_VERIFY_SYSTEM_PROMPT_ORIGINAL,
     ROUTE_OR_FILL_SYSTEM_PROMPT,
     build_direct_verify_user_prompt,
     build_route_or_fill_user_prompt,
@@ -348,6 +349,7 @@ class AgentRunConfig:
     retries: int = 2
     recursion_limit: int = 256
     stop: List[str] = field(default_factory=lambda: [END_MARKER])
+    use_strict_prompts: bool = True
 
     @classmethod
     def from_env(cls) -> "AgentRunConfig":
@@ -357,6 +359,7 @@ class AgentRunConfig:
             route_or_fill_max_tokens=int(os.environ.get("AGENT_MAX_TOKENS_ROUTE_FILL", "512")),
             retries=int(os.environ.get("AGENT_RETRIES", "2")),
             recursion_limit=int(os.environ.get("LANGGRAPH_RECURSION_LIMIT", "256")),
+            use_strict_prompts=os.environ.get("USE_STRICT_PROMPTS", "1").lower() not in {"0", "false", "no"},
         )
 
 
@@ -494,24 +497,42 @@ class RunObserver:
 
 def retrieve_candidates_for_item(item: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     configure_process_cuda_visibility()
+
+    use_bm25_tuning    = os.environ.get("USE_BM25_TUNING",    "1").lower() not in {"0", "false", "no"}
+    use_ancestor_paths = os.environ.get("USE_ANCESTOR_PATHS", "1").lower() not in {"0", "false", "no"}
+
+    bm25_b = 0.5 if use_bm25_tuning else 0.75
+    # MAPPER_ES_INDEX wins if set explicitly; otherwise derive from the BM25 flag.
+    # Tuning ON  → preserve existing default index name (backward compat).
+    # Tuning OFF → point at the pre-built original-b index.
+    es_index = os.environ.get(
+        "MAPPER_ES_INDEX",
+        "snomed_ct_es_index" if use_bm25_tuning else "snomed_ct_es_index_original",
+    )
+
     resources = get_cached_mapper_resources(
         snomed_source_dir=os.environ.get("SNOMED_SOURCE_DIR", "snomed_us_source"),
         concept_path=os.environ.get("SNOMED_CONCEPT_PATH"),
         description_path=os.environ.get("SNOMED_DESCRIPTION_PATH"),
-        es_index=os.environ.get("MAPPER_ES_INDEX", "snomed_ct_es_index"),
+        es_index=es_index,
         dense_index_path=os.environ.get("MAPPER_DENSE_INDEX_PATH", "results/snomed_terms_dense_test.bin"),
         model_name=os.environ.get("MAPPER_MODEL_NAME", "tavakolih/all-MiniLM-L6-v2-pubmed-full"),
         device=os.environ.get("MAPPER_DEVICE", "cuda:0"),
         k_dense=int(os.environ.get("MAPPER_K_DENSE", "50")),
         k_bm25=int(os.environ.get("MAPPER_K_BM25", "50")),
         k_final=int(os.environ.get("MAPPER_K_FINAL", "25")),
-        n_final=int(os.environ.get("MAPPER_N_FINAL","15")),
+        n_final=int(os.environ.get("MAPPER_N_FINAL", "15")),
         rebuild_dense_index=os.environ.get("MAPPER_REBUILD_DENSE_INDEX", "").lower() in {"1", "true", "yes"},
         rebuild_es_index=os.environ.get("MAPPER_REBUILD_ES_INDEX", "").lower() in {"1", "true", "yes"},
         item_term_keys=DEFAULT_ITEM_TERM_KEYS,
         reranker_model_id=os.environ.get("RERANKER_MODEL_ID", ""),
         reranker_device=os.environ.get("RERANKER_DEVICE", "cuda:0"),
+        bm25_b=bm25_b,
     )
+
+    if not use_ancestor_paths:
+        resources = replace(resources, is_a_graph=None)  # shallow copy — never mutate the cache
+
     return retrieve_candidates_for_item_hybrid(item, resources)
 
 
@@ -629,9 +650,11 @@ class ContraLangGraphAgent:
         return parsed, raw
 
     def _verify_direct_match(self, ci_text: str, focus_candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
+        system_prompt = (DIRECT_VERIFY_SYSTEM_PROMPT if self.cfg.use_strict_prompts
+                         else DIRECT_VERIFY_SYSTEM_PROMPT_ORIGINAL)
         user = build_direct_verify_user_prompt(ci_text, focus_candidates, max_n=10)
         parsed, raw = self._call_llm_json(
-            DIRECT_VERIFY_SYSTEM_PROMPT,
+            system_prompt,
             user,
             max_tokens=self.cfg.direct_match_max_tokens,
             call_name="direct_match",

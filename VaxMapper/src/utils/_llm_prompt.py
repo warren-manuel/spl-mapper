@@ -42,11 +42,11 @@ TASK 1: IDENTIFY ATOMIC CONTRAINDICATIONS
 Given the input TEXT:
 
 1) Carefully read the TEXT and identify EVERY text span that expresses a contraindication.
-
 2) For each span split any coordinated phrase into multiple ATOMIC contraindications ONLY when coordination represents DISTINCT standalone contraindications:
    - If a contraindication statement contains coordination (e.g., "or", "and", commas, bullet lists),
-   you MUST ALWAYS split it into MULTIPLE atomic contraindications whenever each item could stand alone as a distinct contraindication.
-   Example:
+   you MUST ALWAYS split it into MULTIPLE atomic contraindications. whenever each item could stand alone.
+   Examples:
+   - Text:
      "known hypersensitivity to drug A or to any of the other ingredients in drug A, or
      with known hypersensitivity to drug B analogs, including or such as drug C"
    You MUST extract THREE separate contraindications:
@@ -55,18 +55,9 @@ Given the input TEXT:
    3) hypersensitivity to drug B
    DO NOT add a separate contraindication for the example drug (drug C).
 
-   BUT:
-
-    DO NOT split when coordination defines a SINGLE condition:
-    Example:
-    "drugs that prolong QT interval and are metabolized via CYP3A4"
-    
-    KEEP AS ONE atomic contraindication
-
    Do NOT merge coordinated items into a single generalized condition.
    Do NOT abstract away specific substances or categories.
    - For lists such as "A, B, and C", create one atomic contraindication for each of A, B, and C.
-
 3) Atomic span construction rule (CRITICAL): Each atomic contraindication must be grounded in the TEXT using only words that appear in the TEXT, but it does NOT need to be a single contiguous substring when splitting coordination.
    - When a shared head is coordinated (e.g., "moderate or severe condition X is a contraindication"), you MUST create separate atomic items by recombining the shared head with each coordinated modifier using exact words from the TEXT:
      - moderate condition X
@@ -79,12 +70,9 @@ For the purpose of TASK 2, internally represent the result of TASK 1 as a list o
 TASK 1 SELF-CHECK: COORDINATION SPLITTING
 --------------------
 Before producing the final JSON:
-Review each item in ATOMIC_LIST and verify that:
-1) It a COMPLETE clinical statement
-2) It contains no unsplit coordination that should have been separated.
-3) It is the smallest standalone contraindicated condition supported by the text.
-
-If not, fix it.
+1) Review ATOMIC_LIST and verify that no item still contains unsplit coordination that should have been separated.
+2) If any item still contains multiple standalone contraindications joined by "and", "or", commas, or list structure, split it further.
+3) Ensure each final item is the smallest standalone contraindicated condition supported by the text.
 
 --------------------
 TASK 2: STRUCTURED OUTPUT
@@ -92,17 +80,14 @@ TASK 2: STRUCTURED OUTPUT
 For each final atomic contraindication in ATOMIC_LIST, output one JSON object with these fields:
 
 - "ci_text":
-  - The atomic contraindication text in the ATOMIC_LIST.
+  - The atomic contraindication text.
+  - It should be grounded in the original text and contain enough context to preserve meaning.
 
 -"contraindication_state_text":
-  - A CORE clinical problem (state, condition, procedure, or situation) that makes use of the drug unsafe, with all modifiers removed.
-    Examples:
-    "hypersensitivity disposition"
-    "drug administration"
-    "hepatic impairment"
+  - A concise, normalized description of the core clinical problem (state, condition, procedure, or situation) that makes use of the drug unsafe, with all modifiers removed.
   - Normalize wording to a general clinical formulation rather than copying the original phrasing.
   - This may be a disease/disorder, clinical finding, procedure, or clinical situation.
-    Do NOT include:
+    Do NOT return:
         - Drug or substance names.
         - Standalone modifiers such as severity, clinical course, temporality, or laboratory thresholds.
         - Remove population framing and keep only the underlying clinical state.
@@ -113,12 +98,10 @@ For each final atomic contraindication in ATOMIC_LIST, output one JSON object wi
 
 - "severity_span":
   - Exact severity wording from the text, if present.
-  - Examples: mild, moderate, severe
   - If absent, set to null.
 
-- "clinical_course_span":
+- "course_span":
   - Exact clinical course wording from the text, if present.
-  - Examples: acute, chronic, recurrent, subacute
   - If absent, set to null.
 
 Rules:
@@ -143,7 +126,7 @@ Each element of "items" MUST be an object with these fields:
 - "contraindication_state_text"
 - "substance_text"
 - "severity_span"
-- "clinical_course_span"
+- "course_span"
 
 
 If there are no contraindications in the text, return: {"items":[]}
@@ -157,8 +140,8 @@ Here is the CONTRAINDICATIONS section from a vaccine SPL document:
 # ---------------------------------------------
 # Prompt 02: MAPPING VERIFICATION
 # ---------------------------------------------
-# Original prompt (pre-20260407). Used when USE_STRICT_PROMPTS=0.
-DIRECT_VERIFY_SYSTEM_PROMPT_ORIGINAL = """
+
+DIRECT_VERIFY_SYSTEM_PROMPT = """
 You are a strict biomedical terminology validator.
 Your role is to determine if a candidate is a LEXICAL and SEMANTIC identity match for the contraindication query.
 
@@ -187,74 +170,6 @@ A candidate is a DIRECT MATCH only if it is an exact semantic equivalent. Do NOT
 5) Hierarchical Granularity:
 - A match must exist at the same level of specificity as the query.
 - A broader parent or narrower child is NOT a direct match.
-
---------------------
-CANDIDATE ELIGIBILITY FILTERS
---------------------
-Unless the query explicitly describes a procedure or product, do NOT select candidates whose label indicates:
-- procedure
-- administration
-- vaccination
-- other overly broad parent concepts when the query is specific
-
---------------------
-OUTPUT FORMAT
---------------------
-Return ONLY minified JSON followed immediately by <<END_JSON>>.
-Do NOT use markdown fences.
-Do NOT include explanations or extra fields.
-
-Schema:
-{"direct_match":true/false,"selected_id":"<candidate id or N/A>","selected_term":"<candidate term or N/A>"}<<END_JSON>>
-
-Rules:
-- If direct_match=true, selected_id MUST be from the candidate list.
-- If direct_match=false, selected_id and selected_term MUST be N/A.
-"""
-
-# Stricter prompt added 20260407: explicit subtype rejection, "when in doubt return false" default.
-
-DIRECT_VERIFY_SYSTEM_PROMPT = """
-You are a strict biomedical terminology validator.
-Your role is to determine if a candidate is a LEXICAL and SEMANTIC identity match for the contraindication query.
-
-Your ONLY task:
-- Identify if a DIRECT MATCH exists among the provided candidates.
-- If a match exists, select exactly ONE candidate from the list.
-- Otherwise, return no match.
-
-When in doubt, return no match. A false negative here is recoverable; a false positive is not.
-
---------------------
-DIRECT MATCH (STRICT)
---------------------
-A candidate is a DIRECT MATCH only if its label is an exact lexical-semantic equivalent to the query — identical clinical meaning, identical ontological level, identical primary term.
-
-1) Primary Term Identity:
-- The root condition word used in the query MUST be the same root condition word in the candidate label.
-- Clinically related terms that are NOT interchangeable in SNOMED CT:
-    * "Hypersensitivity" ≠ "Allergy"  (Allergy is a subtype of Hypersensitivity — different concepts)
-    * "Hypersensitivity" ≠ "Sensitivity"
-    * "Disorder" ≠ "Finding"
-    * "Reaction" ≠ "Hypersensitivity"
-- If the query says "hypersensitivity to X" and the candidate says "allergy to X", return no match even if they seem clinically equivalent. They occupy different positions in the SNOMED CT hierarchy.
-
-2) Hierarchical Granularity — subtypes and supertypes are both wrong:
-- A narrower (more specific) concept is NOT a match: "Allergy to ibuprofen" is NOT a match for "Hypersensitivity to ibuprofen".
-- A broader (more general) concept is NOT a match: "Hypersensitivity disorder" is NOT a match for "Hypersensitivity to ibuprofen".
-- The candidate must encode exactly the same meaning — not more specific, not more general.
-
-3) Meaning Completeness:
-- Do NOT select a candidate that represents only part of the query meaning.
-- Do NOT select a candidate that adds qualifiers not present in the query (e.g., "known", "documented", "acute").
-
-4) Temporal/Contextual Scope:
-- "Post-X" is NOT a match for "X".
-- "History of X" is NOT a match for "X".
-- If the query implies a state after an event and the candidate is only the event, return no match.
-
-5) Semantic Type Guardrail:
-- If the query implies a condition/state, do NOT select a procedure concept unless the query explicitly describes a procedure.
 
 --------------------
 CANDIDATE ELIGIBILITY FILTERS
@@ -313,12 +228,7 @@ def format_candidate_block(candidates: List[Dict[str, Any]], max_n: int = 10) ->
     for i, candidate in enumerate(candidates[:max_n], 1):
         cid = candidate.get("id")
         label = candidate.get("label") or candidate.get("term") or ""
-        score = candidate.get("rerank_score") or candidate.get("fused") or 0.0
-        ancestor_path = candidate.get("ancestor_path", "")
-        line = f"{i}) {cid} | Concept name: {label} | Score: {score:.3f}"
-        if ancestor_path:
-            line += f" | Ancestor path: {ancestor_path}"
-        lines.append(line)
+        lines.append(f"{i}) {cid} |{label}|")
     return "\n".join(lines)
 
 
@@ -368,11 +278,11 @@ def split_atomic_if_needed(
 
 
 ROUTE_OR_FILL_SYSTEM_PROMPT = """
-You are a SNOMED CT minimal representation assistant for SNOMED CT concepts.
+You are a SNOMED CT minimal representation assistant for contraindications.
 
 Your job has two parts:
-1) Decide whether a given expression can be sufficiently represented using ONLY:
-   - one problem concept
+1) Decide whether the contraindication can be sufficiently represented using ONLY:
+   - one focus concept
    - optional causative_agent
    - optional severity
    - optional clinical_course
@@ -394,7 +304,7 @@ Do NOT use markdown fences.
 Do NOT include explanations or extra fields.
 
 Schema:
-{"post_decision":"YES|N/A","selected_problem_id":"<id or N/A>","fills":{"causative_agent":"<id or N/A>","severity":"<id or N/A>","clinical_course":"<id or N/A>"}}<<END_JSON>>
+{"post_decision":"YES|N/A","selected_focus_id":"<id or N/A>","fills":{"causative_agent":"<id or N/A>","severity":"<id or N/A>","clinical_course":"<id or N/A>"}}<<END_JSON>>
 """
 
 
