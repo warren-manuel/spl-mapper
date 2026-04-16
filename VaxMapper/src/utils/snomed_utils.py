@@ -345,6 +345,37 @@ def get_ancestors(concept_id: int, snomed_rel_df: pd.DataFrame) -> Set[int]:
     return ancestors
 
 
+def get_ancestors_with_depth(
+    concept_id: int,
+    snomed_rel_df: pd.DataFrame,
+) -> Dict[int, int]:
+    """
+    BFS upward from concept_id through IS-A relationships.
+    Returns {ancestor_id: min_hop_distance} for all ancestors.
+
+    snomed_rel_df must be indexed by sourceId (set_index("sourceId", drop=True))
+    and should contain only active IS-A rows (typeId == 116680003) for efficiency,
+    though correctness is maintained with a full active rel_df.
+    """
+    from collections import deque
+    visited: Dict[int, int] = {}
+    queue: deque = deque([(concept_id, 0)])
+    while queue:
+        current, dist = queue.popleft()
+        if current != concept_id:
+            if current in visited:
+                continue
+            visited[current] = dist
+        try:
+            parents = snomed_rel_df.loc[[current], "destinationId"].tolist()
+        except KeyError:
+            parents = []
+        for p in parents:
+            if p not in visited:
+                queue.append((p, dist + 1))
+    return visited
+
+
 def check_snomed_connection(timeout: int = 10, base_url: str = base) -> None:
     """
     Raise an exception if SNOMED Snowstorm base endpoint is unreachable.

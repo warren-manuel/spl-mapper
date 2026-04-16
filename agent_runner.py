@@ -586,7 +586,7 @@ def aggregate_result_item(result: Dict[str, Any]) -> Dict[str, Any]:
             "item_index": int(result.get("item_index", 0)),
             "query_text": str(result.get("query_text", "")),
             "mapping_source": "postcoord" if status == "POSTCOORD" else "minimal",
-            "final_concept_id": str(result.get("selected_focus_id", "N/A")),
+            "final_concept_id": str(result.get("selected_problem_id", "N/A")),
             "final_concept_term": str(result.get("selected_focus_term", "N/A")),
             "postcoord_expression": str(result.get("expression", "N/A")),
             "attributes": attributes,
@@ -685,7 +685,7 @@ def evaluate_aggregated_predictions(
     resolved_st_model_id = st_model_id or os.environ.get("MAPPER_MODEL_NAME", "tavakolih/all-MiniLM-L6-v2-pubmed-full")
     cmd = [
         "python3",
-        "evaluate_agg_results_2.py",
+        "evaluate_agg_results_3.py",
         "--pred-csv", pred_csv,
         "--gold-csv", gold_csv,
         "--out-json", out_json,
