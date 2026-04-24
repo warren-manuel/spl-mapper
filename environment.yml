@@ -28,19 +28,33 @@ dependencies:
   # ---- Similarity search ----
   - faiss-gpu=1.7.5             # CUDA-12 build; falls back to CPU if GPU busy
 
-  # ---- Data / utils ----
+  # ---- Data / science ----
   - numpy
   - pandas
+  - scipy                       # linear_sum_assignment used in src/evaluation/evaluator.py
   - tqdm
 
+  # ---- Graph / XML / network ----
+  - networkx                    # IS-A graph in src/retrieval/search_utils.py
+  - lxml                        # SPL XML parsing in src/extraction/section_parser.py
+
+  # ---- Elasticsearch client ----
+  - pip:
+      - elasticsearch>=8.0      # src/retrieval/es_utils.py
+      - docker                  # scripts/elastic_es.py Docker container launcher
+      - openai                  # Azure OpenAI backend in scripts/run_pipeline.py
+      - langgraph                # LangGraph orchestration
+      - python-dotenv            # .env loading in scripts/run_pipeline.py
+      - requests                 # DailyMed API + SNOMED Snowstorm in src/
+      - owlready2                # RxNorm / ontology access in VaxMapper utilities
+      # NOTE: ollama-python not verified as used in active src/ code; retained for
+      # notebook experimentation. Remove if confirmed unused after next audit.
+      - ollama-python
+
   # ---- Jupyter & widgets ----
-  - jupyterlab=4.*              
+  - jupyterlab=4.*
   - ipykernel
   - ipywidgets=8.*              # widget runtime
   - jupyterlab-widgets          # JS side for Lab 4
   - widgetsnbextension          # classic-notebook widget support
   - nodejs                      # builds extensions where needed
-
-  # ---- Extras installed via pip ----
-  - pip:
-      - ollama-python           # talk to a local Ollama daemon

@@ -1,15 +1,35 @@
+# Secrets
 .env
-.mmd
+
+# Python
 __pycache__/
-.claude/
+**/__pycache__/
+*.pyc
 .ipynb_checkpoints/
+
+# Data directories (large external sources)
 data/
 esdata/
 FAISS/
 mresults/
-results/
 snomed_int_source/
 snomed_us_source/
 splmap/
-tests/
 vo_source/
+
+# Output artifacts — all results go in results/ which is gitignored
+results/
+
+# Binary indexes and caches
+**/*.bin
+**/*.pkl
+
+# Logs
+**/*.log
+nohup.out
+
+# Result files (JSONL output — not source data)
+*.jsonl
+
+# Claude Code harness
+.claude/
