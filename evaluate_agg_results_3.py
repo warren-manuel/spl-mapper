@@ -120,8 +120,26 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument(
         "--hierarchy-partial-score",
         type=float,
-        default=0.5,
+        default=0.0,
         help="Floor score for direct ancestor/descendant concept matches (default 0.5).",
+    )
+    ap.add_argument(
+        "--sibling-base",
+        type=float,
+        default=0.4,
+        help="Base score for sibling/cousin concept matches via LCA (default 0.4).",
+    )
+    ap.add_argument(
+        "--sibling-decay",
+        type=float,
+        default=0.1,
+        help="Score decay per hop from LCA for sibling/cousin matches (default 0.05).",
+    )
+    ap.add_argument(
+        "--hop-penalty",
+        type=float,
+        default=0.25,
+        help="Score penalty per hop for ancestor/descendant matches (default 0.25).",
     )
     return ap.parse_args()
 
@@ -237,15 +255,19 @@ def concept_similarity_score(
     gold_id: str,
     rel_df_indexed: "pd.DataFrame",
     partial_floor: float = 0.5,
+    sibling_base: float = 0.4,
+    sibling_decay: float = 0.05,
+    hop_penalty: float = 0.15,
 ) -> float:
     """
     Hierarchical similarity score in [0.0, 1.0] between two SNOMED concept IDs.
 
     Scoring tiers:
       - Exact match                          → 1.0
-      - pred is ancestor of gold (too gen.)  → max(partial_floor, 1.0 - 0.15 * depth_diff)
-      - pred is descendant of gold (too sp.) → max(partial_floor, 1.0 - 0.15 * depth_diff)
-      - Common ancestor (sibling/cousin)     → max(0.1, 0.4 - 0.05 * (depth(gold) - lca_depth))
+      - pred is ancestor of gold (too gen.)  → max(partial_floor, 1.0 - hop_penalty * depth_diff)
+      - pred is descendant of gold (too sp.) → max(partial_floor, 1.0 - hop_penalty * depth_diff)
+      - Common ancestor (sibling/cousin)     → max(0.1, sibling_base - sibling_decay
+                                                        * (gold_hops_to_lca + pred_hops_to_lca))
       - No relationship                      → 0.0
     """
     if predicted_id == gold_id:
@@ -261,12 +283,12 @@ def concept_similarity_score(
     if p in gold_anc:
         # Predicted is an ancestor of gold — too general
         depth_diff = gold_anc[p]
-        return max(partial_floor, 1.0 - (0.15 * depth_diff))
+        return max(partial_floor, 1.0 - (hop_penalty * depth_diff))
 
     if g in pred_anc:
         # Predicted is a descendant of gold — too specific
         depth_diff = pred_anc[g]
-        return max(partial_floor, 1.0 - (0.15 * depth_diff))
+        return max(partial_floor, 1.0 - (hop_penalty * depth_diff))
 
     # Check for common ancestors (siblings / cousins)
     common = set(gold_anc) & set(pred_anc)
@@ -274,7 +296,9 @@ def concept_similarity_score(
         lca = max(common, key=lambda a: get_concept_depth(a, rel_df_indexed))
         lca_depth = get_concept_depth(lca, rel_df_indexed)
         gold_depth = get_concept_depth(g, rel_df_indexed)
-        return max(0.1, 0.4 - (0.05 * (gold_depth - lca_depth)))
+        pred_depth = get_concept_depth(p, rel_df_indexed)
+        total_hops = (gold_depth - lca_depth) + (pred_depth - lca_depth)
+        return max(0.0, sibling_base - (sibling_decay * total_hops))
 
     return 0.0
 
@@ -284,6 +308,9 @@ def compute_tiered_concept_metrics(
     pred_ids: Set[str],
     rel_df_indexed: "pd.DataFrame",
     partial_floor: float = 0.5,
+    sibling_base: float = 0.4,
+    sibling_decay: float = 0.05,
+    hop_penalty: float = 0.15,
 ) -> Tuple[float, float, float]:
     """
     Compute (tp, fp, fn) as floats using hierarchy-aware scoring and optimal
@@ -296,7 +323,13 @@ def compute_tiered_concept_metrics(
 
     score_mat = np.array(
         [
-            [concept_similarity_score(p, g, rel_df_indexed, partial_floor) for g in gold_list]
+            [
+                concept_similarity_score(
+                    p, g, rel_df_indexed, partial_floor,
+                    sibling_base, sibling_decay, hop_penalty,
+                )
+                for g in gold_list
+            ]
             for p in pred_list
         ],
         dtype=np.float64,
@@ -622,7 +655,8 @@ def main() -> None:
                 if rel_df_indexed is not None:
                     matched_concept_tp, matched_concept_fp, matched_concept_fn = (
                         compute_tiered_concept_metrics(
-                            gold_ids, pred_ids, rel_df_indexed, args.hierarchy_partial_score
+                            gold_ids, pred_ids, rel_df_indexed, args.hierarchy_partial_score,
+                            args.sibling_base, args.sibling_decay, args.hop_penalty,
                         )
                     )
                 else:

@@ -1,4 +1,5 @@
 .env
+.mmd
 __pycache__/
 .claude/
 .ipynb_checkpoints/

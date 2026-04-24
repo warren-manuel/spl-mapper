@@ -164,6 +164,56 @@ def create_snomed_complete_df(concept_df: pd.DataFrame, synonym_df: pd.DataFrame
     return snomed_complete_df
 
 
+def create_enriched_terms_df(
+    snomed_complete_df: pd.DataFrame,
+    rel_df: pd.DataFrame,
+    exclude_type_ids: Optional[Set[int]] = None,
+) -> pd.DataFrame:
+    """
+    Build one row per concept with a rich pipe-delimited embedding string.
+
+    Format:
+        preferred_term | syn1 | syn2 | ... | semantic_tag | attr_name1 = val1 | ...
+
+    IS-A relationships are excluded by default; all other active relationships
+    are serialised as ``type_name = destination_name`` pairs.
+
+    Columns returned:
+        - conceptId  (int)
+        - term_text  (str)
+    """
+    if exclude_type_ids is None:
+        exclude_type_ids = {int(ISA)}
+
+    # Fast lookup: conceptId -> preferred label with semantic tag stripped
+    id_to_label: Dict[int, str] = {
+        int(row["conceptId"]): re.sub(r"\s*\([^)]+\)\s*$", "", str(row["term"])).strip()
+        for _, row in snomed_complete_df.iterrows()
+    }
+
+    # Build attribute strings per concept, excluding IS-A and other excluded types
+    attr_df = rel_df[~rel_df["typeId"].isin(exclude_type_ids)]
+    attr_map: Dict[int, List[str]] = defaultdict(list)
+    for row in attr_df.itertuples(index=False):
+        type_label = id_to_label.get(int(row.typeId), str(row.typeId))
+        dest_label = id_to_label.get(int(row.destinationId), str(row.destinationId))
+        attr_map[int(row.sourceId)].append(f"{type_label} = {dest_label}")
+
+    records = []
+    for _, row in snomed_complete_df.iterrows():
+        cid = int(row["conceptId"])
+        parts: List[str] = [str(row["term"])]
+        synonyms = row.get("synonyms") or []
+        parts.extend(str(s) for s in synonyms if s)
+        semantic_tag = str(row.get("semantic_tag", "")).strip()
+        if semantic_tag:
+            parts.append(semantic_tag)
+        parts.extend(attr_map.get(cid, []))
+        records.append({"conceptId": cid, "term_text": " | ".join(p for p in parts if p)})
+
+    return pd.DataFrame(records)
+
+
 def load_snomed_dataframes(
     concept_snapshot_path: Optional[str] = None,
     description_snapshot_path: Optional[str] = None,
@@ -221,6 +271,11 @@ def load_snomed_dataframes(
         ["sourceId", "destinationId", "typeId", "relationshipGroup"]
     ].copy()
 
+    enriched_terms_df = create_enriched_terms_df(
+        snomed_complete_df=snomed_complete_df,
+        rel_df=rel_df,
+    )
+
     if output_dir:
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -237,6 +292,7 @@ def load_snomed_dataframes(
         "synonym_df": synonym_df,
         "terms_df": terms_df,
         "snomed_complete_df": snomed_complete_df,
+        "enriched_terms_df": enriched_terms_df,
         "domain": domain,
         "attr_domain": attr_domain,
         "attr_range": attr_range,

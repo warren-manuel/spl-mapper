@@ -80,6 +80,27 @@ _PREFILTER_MEMBERSHIP_CACHE: Dict[str, Dict[str, Dict[int, bool]]] = {}
 _PREFILTER_ECL_CACHE: Dict[Tuple[int, str], bool] = {}
 
 
+def append_extraction_cache(path: str, entry: Dict[str, Any]) -> None:
+    """Append a single SPL extraction entry to the cache file (crash-safe)."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def load_extraction_cache(path: str) -> Dict[str, Dict[str, Any]]:
+    """Load extraction cache JSONL into a dict keyed by spl_set_id."""
+    cache: Dict[str, Dict[str, Any]] = {}
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                entry = json.loads(line)
+                spl_set_id = entry.get("spl_set_id", "")
+                if spl_set_id:
+                    cache[spl_set_id] = entry
+    return cache
+
+
 class ConfigError(ValueError):
     pass
 
@@ -593,10 +614,11 @@ def prefilter_slot_candidates(cands: Dict[str, List[Dict[str, Any]]]) -> Dict[st
 
 
 class ContraLangGraphAgent:
-    def __init__(self, llm: ChatLLM, cfg: Optional[AgentRunConfig] = None, observer: Optional[RunObserver] = None):
+    def __init__(self, llm: ChatLLM, cfg: Optional[AgentRunConfig] = None, observer: Optional[RunObserver] = None, extraction_cache: Optional[Dict[str, Dict[str, Any]]] = None):
         self.llm = llm
         self.cfg = cfg or AgentRunConfig()
         self.observer = observer
+        self.extraction_cache = extraction_cache  # None = disabled; {} = enabled but empty
         self.item_graph = self._build_item_graph()
         self.spl_graph = self._build_spl_graph()
 
@@ -966,6 +988,32 @@ class ContraLangGraphAgent:
                         )
             return wrapped
 
+        def bootstrap_node(state: ContraState) -> ContraState:
+            if self.extraction_cache is None:  # None = caching disabled; {} = enabled but empty
+                return state
+            spl_record = state.get("spl_record", {})
+            spl_set_id = (spl_record.get("SPL_SET_ID") or spl_record.get("spl_set_id") or "").strip()
+            entry = self.extraction_cache.get(spl_set_id)
+            if entry is None:
+                return state
+            return {
+                **state,
+                "spl_set_id": spl_set_id,
+                "product_name": entry.get("product_name"),
+                "contra_section_found": entry.get("contra_section_found", False),
+                "contra_section_text": entry.get("contra_section_text", ""),
+                "extracted_items": entry.get("extracted_items", []),
+                "current_index": 0,
+                "item_results": [],
+            }
+
+        def route_after_bootstrap(state: ContraState) -> str:
+            if "extracted_items" not in state:   # no cache hit — run full extraction
+                return "resolve_contra_section"
+            if not state.get("extracted_items"):  # cache hit, 0 items
+                return "finalize"
+            return "prepare_item"                 # cache hit, items ready
+
         def resolve_contra_section_node(state: ContraState) -> ContraState:
             spl_record = dict(state["spl_record"])
             spl_set_id = spl_record.get("SPL_SET_ID") or spl_record.get("spl_set_id") or str(uuid.uuid4())
@@ -1114,6 +1162,7 @@ class ContraLangGraphAgent:
                 },
             }
 
+        graph.add_node("bootstrap", instrument_spl_node("bootstrap", bootstrap_node))
         graph.add_node("resolve_contra_section", instrument_spl_node("resolve_contra_section", resolve_contra_section_node))
         graph.add_node("extract_items", instrument_spl_node("extract_items", extract_items_node))
         graph.add_node("prepare_item", instrument_spl_node("prepare_item", prepare_item_node))
@@ -1121,7 +1170,12 @@ class ContraLangGraphAgent:
         graph.add_node("advance_item", instrument_spl_node("advance_item", advance_item_node))
         graph.add_node("finalize", instrument_spl_node("finalize", finalize_node))
 
-        graph.set_entry_point("resolve_contra_section")
+        graph.set_entry_point("bootstrap")
+        graph.add_conditional_edges(
+            "bootstrap",
+            route_after_bootstrap,
+            {"resolve_contra_section": "resolve_contra_section", "prepare_item": "prepare_item", "finalize": "finalize"},
+        )
         graph.add_conditional_edges(
             "resolve_contra_section",
             route_after_resolve,
@@ -1212,7 +1266,24 @@ def main() -> None:
         choices=("azure", "huggingface"),
         help="LLM backend to use.",
     )
+    parser.add_argument(
+        "--extracted-items-cache",
+        default="",
+        help=(
+            "Path to extraction cache JSONL. On first run the file is created and "
+            "populated as each SPL completes. On subsequent runs the file is loaded "
+            "so the extract_items LLM call is skipped entirely."
+        ),
+    )
     args = parser.parse_args()
+
+    # Load extraction cache if it already exists; otherwise we'll build it during this run.
+    extraction_cache: Optional[Dict[str, Dict[str, Any]]] = None
+    cache_was_loaded = False
+    if args.extracted_items_cache and Path(args.extracted_items_cache).exists():
+        extraction_cache = load_extraction_cache(args.extracted_items_cache)
+        cache_was_loaded = True
+        print(f"Loaded extraction cache ({len(extraction_cache)} entries): {args.extracted_items_cache}")
 
     llm = build_llm(args.backend)
     observer = RunObserver(
@@ -1221,7 +1292,7 @@ def main() -> None:
         progress_enabled=not args.disable_progress,
     )
     print(f"Agent Config: {AgentRunConfig.from_env()}")
-    agent = ContraLangGraphAgent(llm=llm, cfg=AgentRunConfig.from_env(), observer=observer)
+    agent = ContraLangGraphAgent(llm=llm, cfg=AgentRunConfig.from_env(), observer=observer, extraction_cache=extraction_cache)
 
     spl_records = load_spl_records_from_file(args.spl_list)
     run_rows: List[Dict[str, Any]] = []
@@ -1232,6 +1303,15 @@ def main() -> None:
             result = agent.process_spl(spl)
             run_rows.append(result)
             f.write(json.dumps(result, ensure_ascii=False) + "\n")
+            # Append to cache immediately after each SPL so progress survives a crash.
+            if args.extracted_items_cache and not cache_was_loaded and not result.get("error"):
+                append_extraction_cache(args.extracted_items_cache, {
+                    "spl_set_id": result["SPL_SET_ID"],
+                    "product_name": result.get("product_name"),
+                    "contra_section_found": result.get("contra_section_found", False),
+                    "contra_section_text": result.get("contra_section_text", ""),
+                    "extracted_items": [r["extracted_item"] for r in result.get("results", [])],
+                })
     observer.clear_progress()
 
     aggregated_rows, csv_rows = aggregate_agent_results(run_rows)

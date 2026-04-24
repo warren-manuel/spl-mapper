@@ -16,6 +16,10 @@ SPL_LIST="results/setid_100.txt"
 GOLD_CSV="results/contra_gold_100_3.csv"
 BASE_DIR="results/$(date +%Y%m%d)_isolation"
 
+# Shared extraction cache — built on the first run, reused by all subsequent runs.
+# This skips the extract_items LLM call (7 of 8 runs save ~N_SPL * extraction_time).
+EXTRACTION_CACHE="${BASE_DIR}/extraction_cache.jsonl"
+
 run_exp() {
     local tag=$1 bm25=$2 anc=$3 strict=$4
     local out="$BASE_DIR/$tag"
@@ -26,14 +30,15 @@ run_exp() {
     USE_ANCESTOR_PATHS=$anc \
     USE_STRICT_PROMPTS=$strict \
         python langgraph_agent_runner.py \
-            --spl-list          "$SPL_LIST" \
-            --out-jsonl         "$out/agent_results.jsonl" \
-            --aggregated-jsonl  "$out/aggregated_results.jsonl" \
-            --aggregated-csv    "$out/aggregated_hits.csv" \
-            --gold-csv          "$GOLD_CSV" \
-            --eval-json         "$out/eval_metrics.json" \
-            --eval-details-csv  "$out/evaluation_details.csv" \
-            --audit-jsonl       "$out/runtime_audit.jsonl"
+            --spl-list               "$SPL_LIST" \
+            --out-jsonl              "$out/agent_results.jsonl" \
+            --aggregated-jsonl       "$out/aggregated_results.jsonl" \
+            --aggregated-csv         "$out/aggregated_hits.csv" \
+            --gold-csv               "$GOLD_CSV" \
+            --eval-json              "$out/eval_metrics.json" \
+            --eval-details-csv       "$out/evaluation_details.csv" \
+            --audit-jsonl            "$out/runtime_audit.jsonl" \
+            --extracted-items-cache  "$EXTRACTION_CACHE"
 }
 
 # ── 8 combinations (binary factorial) ──────────────────────────────────────

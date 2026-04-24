@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph SPL["**SPL Graph**"]
+        direction TB
+        resolve["resolve_contra_section<br/>(fetch SPL XML / use inline text)"]
+        extract["extract_items<br/>(**LLM #1** · extraction)"]
+        prepare["prepare_item<br/>(load item at current_index)"]
+        process["process_item<br/>(invoke Item Graph)"]
+        advance["advance_item<br/>(current_index + 1)"]
+        finalize["finalize<br/>(build final_result)"]
+        SPL_END(["END"])
+
+        resolve -->|"no error"| extract
+        extract -->|"items found"| prepare
+        prepare --> process
+        process --> advance
+        advance -->|"more items"| prepare
+        advance -->|"all done"| finalize
+        finalize --> SPL_END
+    end
+
+    subgraph ITEM["**Item Graph**"]
+        direction TB
+        retrieve["retrieve_candidates<br/>(BM25 + FAISS → RRF)"]
+        direct["direct_match<br/>(**LLM #2** · binary decision)"]
+        prefilter["prefilter<br/>(SNOMED attribute-range filter)"]
+        route_fill["route_or_fill<br/>(**LLM #3** · slot-fill decision)"]
+        assemble_direct["assemble_direct<br/>(status = DIRECT)"]
+        ITEM_END(["END"])
+
+        retrieve --> direct
+        direct -->|"direct_match = true"| assemble_direct
+        direct -->|"otherwise"| prefilter
+        prefilter --> route_fill
+        route_fill --> ITEM_END
+        assemble_direct --> ITEM_END
+    end
+
+    process -. "item_graph.invoke(ItemState)" .-> retrieve
+    ITEM_END -. "item_result → item_results[]" .-> advance
+
+    style extract     stroke:#FF3131,stroke-dasharray:5 5,stroke-width:1.5px
+    style direct      stroke:#FF3131,stroke-dasharray:5 5,stroke-width:1.5px
+    style route_fill  stroke:#FF3131,stroke-dasharray:5 5,stroke-width:1.5px
+    

@@ -23,6 +23,40 @@ from VaxMapper.src.utils.snomed_utils import load_snomed_dataframes
 
 DEFAULT_ITEM_TERM_KEYS = ("ci_text", "contraindication_state_text", "substance_text", "severity_span", "clinical_course_span")
 
+# Structured slots appended to the ci_text query (non-null values only).
+# Order mirrors the enriched index document format.
+_CI_ENRICH_KEYS = (
+    "contraindication_state_text",
+    "substance_text",
+    "severity_span",
+    "clinical_course_span",
+)
+
+
+def build_enriched_ci_query(item: Dict[str, Any]) -> str:
+    """
+    Serialize ci_text + non-null structured slots into a pipe-delimited string
+    that mirrors the enriched FAISS index document format.
+
+    Example::
+
+        item = {
+            "ci_text": "Mycobacterial infection of the eye",
+            "contraindication_state_text": "infection",
+            "substance_text": "Mycobacterial",
+            "severity_span": None,
+            "clinical_course_span": None,
+        }
+        # → "Mycobacterial infection of the eye | contraindication_state_text = infection | substance_text = Mycobacterial"
+    """
+    ci_text = str(item.get("ci_text", "")).strip()
+    parts = [ci_text] if ci_text else []
+    for key in _CI_ENRICH_KEYS:
+        val = item.get(key)
+        if val is not None and str(val).strip():
+            parts.append(f"{key} = {str(val).strip()}")
+    return " | ".join(parts)
+
 SNOMED_CT_SETTINGS_ORIGINAL = {
     "settings": {
         "index": {
@@ -250,9 +284,15 @@ def map_item_terms(
         "ci_text": item.get("ci_text", ""),
     }
 
+    # Build the enriched ci_text query once; all other keys use their raw value.
+    enriched_ci_query = build_enriched_ci_query(item)
+
     for key in resources.item_term_keys:
-        raw_query = item.get(key, None)
-        query = str(raw_query).strip() if raw_query is not None else ""
+        if key == "ci_text":
+            query = enriched_ci_query
+        else:
+            raw_query = item.get(key, None)
+            query = str(raw_query).strip() if raw_query is not None else ""
         out_key = f"{key}_terms"
         if not query:
             mapped_row[out_key] = []
@@ -354,7 +394,7 @@ def load_mapper_resources(
     )
 
     st_model, faiss_index = build_or_load_faiss_index(
-        terms_df=snomed_frames["terms_df"],
+        terms_df=snomed_frames["enriched_terms_df"],
         model_name=model_name,
         device=device,
         index_path=dense_index_path,
