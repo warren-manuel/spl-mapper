@@ -25,7 +25,7 @@ from typing import List, Dict, Any, Tuple
 
 import pandas as pd
 
-from VaxMapper.src.llm import extract_json
+from src.llm.backends import extract_json
 
 
 # -----------------------------

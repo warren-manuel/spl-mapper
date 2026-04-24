@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from VaxMapper.src.llm import extract_json
+from src.llm.backends import extract_json
 import os
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
