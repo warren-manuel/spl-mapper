@@ -41,7 +41,7 @@ from openai import AzureOpenAI
 
 from src.evaluation.evaluator import (
     AGG_CSV_COLUMNS,
-    END as END_MARKER,
+    END_MARKER as END_MARKER,
     aggregate_agent_results,
     candidate_label_by_id,
     evaluate_aggregated_predictions,
@@ -371,6 +371,7 @@ class AgentRunConfig:
     recursion_limit: int = 256
     stop: List[str] = field(default_factory=lambda: [END_MARKER])
     use_strict_prompts: bool = True
+    extraction_only: bool = False
 
     @classmethod
     def from_env(cls) -> "AgentRunConfig":
@@ -1010,7 +1011,7 @@ class ContraLangGraphAgent:
         def route_after_bootstrap(state: ContraState) -> str:
             if "extracted_items" not in state:   # no cache hit — run full extraction
                 return "resolve_contra_section"
-            if not state.get("extracted_items"):  # cache hit, 0 items
+            if not state.get("extracted_items") or self.cfg.extraction_only:
                 return "finalize"
             return "prepare_item"                 # cache hit, items ready
 
@@ -1104,7 +1105,7 @@ class ContraLangGraphAgent:
             }
 
         def route_after_extract(state: ContraState) -> str:
-            if not state.get("extracted_items"):
+            if not state.get("extracted_items") or self.cfg.extraction_only:
                 return "finalize"
             return "prepare_item"
 
@@ -1149,18 +1150,18 @@ class ContraLangGraphAgent:
 
             extracted_items = state.get("extracted_items", [])
             item_results = state.get("item_results", [])
-            return {
-                **state,
-                "final_result": {
-                    "SPL_SET_ID": state["spl_set_id"],
-                    "product_name": state.get("product_name"),
-                    "contra_section_found": bool(state.get("contra_section_found")),
-                    "contra_section_text": state.get("contra_section_text", ""),
-                    "n_items_in": len(extracted_items),
-                    "n_items_out": len(item_results),
-                    "results": item_results,
-                },
+            final: Dict[str, Any] = {
+                "SPL_SET_ID": state["spl_set_id"],
+                "product_name": state.get("product_name"),
+                "contra_section_found": bool(state.get("contra_section_found")),
+                "contra_section_text": state.get("contra_section_text", ""),
+                "n_items_in": len(extracted_items),
+                "n_items_out": len(item_results),
+                "results": item_results,
             }
+            if self.cfg.extraction_only:
+                final["extracted_items"] = extracted_items
+            return {**state, "final_result": final}
 
         graph.add_node("bootstrap", instrument_spl_node("bootstrap", bootstrap_node))
         graph.add_node("resolve_contra_section", instrument_spl_node("resolve_contra_section", resolve_contra_section_node))
@@ -1267,6 +1268,11 @@ def main() -> None:
         help="LLM backend to use.",
     )
     parser.add_argument(
+        "--extraction-only",
+        action="store_true",
+        help="Stop after extraction — skip candidate retrieval and mapping. Output includes extracted_items per SPL.",
+    )
+    parser.add_argument(
         "--extracted-items-cache",
         default="",
         help=(
@@ -1291,8 +1297,9 @@ def main() -> None:
         audit_enabled=not args.disable_audit,
         progress_enabled=not args.disable_progress,
     )
-    print(f"Agent Config: {AgentRunConfig.from_env()}")
-    agent = ContraLangGraphAgent(llm=llm, cfg=AgentRunConfig.from_env(), observer=observer, extraction_cache=extraction_cache)
+    cfg = replace(AgentRunConfig.from_env(), extraction_only=args.extraction_only)
+    print(f"Agent Config: {cfg}")
+    agent = ContraLangGraphAgent(llm=llm, cfg=cfg, observer=observer, extraction_cache=extraction_cache)
 
     spl_records = load_spl_records_from_file(args.spl_list)
     run_rows: List[Dict[str, Any]] = []
