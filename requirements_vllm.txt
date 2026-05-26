@@ -1,0 +1,22 @@
+# vLLM conda environment requirements
+# Target: CUDA 12.9, 8x A100-SXM4-80GB
+# Python: 3.11 (match splmap for consistency)
+#
+# Install instructions:
+#   conda create -n vllm_env python=3.11 -y
+#   pip install -r requirements_vllm.txt
+#
+# NOTE: vllm pulls a compatible torch automatically.
+# If you need the same torch as splmap (cu128), pin:
+#   torch==2.11.0+cu128  --index-url https://download.pytorch.org/whl/cu128
+# and install torch BEFORE running this file.
+
+# Core: let vllm resolve torch/cuda versions automatically
+vllm
+
+# Explicit CUDA 12.9 torch (matches system + splmap cu128 family)
+# Uncomment and install first if vllm's auto-resolved torch doesn't match:
+# --extra-index-url https://download.pytorch.org/whl/cu129
+# torch==2.11.0+cu129
+# torchvision==0.26.0+cu129
+# torchaudio==2.11.0+cu129

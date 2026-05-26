@@ -24,7 +24,7 @@ DEFAULT_PREFILTER_CONTENT_TYPE: Dict[str, Optional[int]] = {
   "clinical_course": None,
 }
 
-IMAC_IP = "139.52.39.136"
+IMAC_IP = "139.52.39.81"
 SNOW_PORT = 8080
 TEST_URL = f"http://{IMAC_IP}:{SNOW_PORT}"
 base = f"http://{IMAC_IP}:{SNOW_PORT}/MAIN/SNOMEDCT-US/concepts"

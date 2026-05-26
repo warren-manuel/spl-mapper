@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "docs-langchain": {
+      "type": "http",
+      "url": "https://docs.langchain.com/mcp"
+    },
+    "snomed-tools": {
+      "command": "/home/srv-wmanuel3/miniconda3/envs/splmap/bin/python3",
+      "args": ["-m", "src.tools.snomed_mcp_server"],
+      "cwd": "/data/wmanuel3/VaxMapperRepo",
+      "env": {
+        "NEO4J_URI": "bolt://139.52.39.81:7687",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "sp1qaz@WSX3edc",
+        "SNOMED_SOURCE_DIR": "snomed_us_source",
+        "MAPPER_ES_INDEX": "snomed_ct_bm25",
+        "MAPPER_DENSE_INDEX_PATH": "FAISS/embeddinggemma-300m.bin",
+        "MAPPER_MODEL_NAME": "google/embeddinggemma-300m",
+        "MAPPER_DEVICE": "cuda:2"
+      }
+    }
+  }
+}

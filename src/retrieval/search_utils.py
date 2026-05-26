@@ -542,6 +542,7 @@ def search_query(
     normalize_query: bool = True,
     cross_encoder: Optional[CrossEncoder] = None,
     is_a_graph: Optional[nx.DiGraph] = None,
+    hierarchy_map: Optional[Dict[int, str]] = None,
 ) -> List[Dict]:
     """
     Convenience wrapper: given a contraindication query string, return fused hits
@@ -644,4 +645,14 @@ def search_query(
             hit["ancestor_path"] = get_longest_ancestor_path(
                 int(hit["id"]), is_a_graph, concept_meta_df
             )
+
+    # 7. Enrich with top_level_hierarchy and semantic_tag
+    for hit in final_hits:
+        cid = int(hit["id"])
+        if hierarchy_map is not None:
+            hit["top_level_hierarchy"] = hierarchy_map.get(cid, "")
+        if cid in concept_meta_df.index:
+            hit["semantic_tag"] = str(concept_meta_df.at[cid, "semantic_tag"]) \
+                if "semantic_tag" in concept_meta_df.columns else ""
+
     return final_hits

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.llm.backends import (
@@ -152,6 +153,105 @@ If there are no contraindications in the text, return: {"items":[]}
 CONTRA_EXTRACT_USER_PROMPT = """
 Here is the CONTRAINDICATIONS section from a vaccine SPL document:
 {text}
+"""
+
+# ---------------------------------------------
+# Prompt 01b: SIMPLE IDENTIFICATION (step 1 of two-step extraction)
+# Prompt contents to be supplied — must return {"items":[{"ci_text":"..."},...]}<<END_JSON>>
+# ---------------------------------------------
+SIMPLE_EXTRACT_SYSTEM_PROMPT = """<|think|>
+You are a clinical NLP specialist extracting contraindications from 
+FDA Structured Product Label (SPL) text.
+
+Your task: identify every contraindication span in the text. 
+A contraindication is a specific medical condition, symptom, or event that makes this product inadvisable,
+because it could be harmful or dangerous to the patient.
+
+Return a JSON list of extracted spans. Each span must be:
+- Verbatim or minimally normalized from the source text
+- A single phrase or clause that expresses a single contraindication concept
+- Complete enough to stand alone as a concept
+
+Output format:
+{"items": [{"ci_text": "<span>"}, ...]}<<END_JSON>>
+
+The JSON must end with the exact token:<<END_JSON>>
+
+Do NOT:
+- Add clinical context not present in the source
+- Merge multiple contraindications into one span  
+- Include precautions, warnings, or monitoring instructions
+- Split coordinated phrases — return them as-is; splitting happens separately.
+"""
+SIMPLE_EXTRACT_USER_PROMPT = """    
+Here is the section of text from the drug label:
+{text}
+Please identify any contraindications mentioned in the text and list them clearly.
+"""
+# ---------------------------------------------
+# Prompt 05: DECOMPOSE COORDINATIONS (step 2 of two-step extraction)
+# Prompt contents to be supplied — must return {"items":[...]}<<END_JSON>> per item
+# Full item schema: ci_text, contraindication_state_text, substance_text,
+#                   severity_span, clinical_course_span
+# ---------------------------------------------
+DECOMPOSE_SYSTEM_PROMPT = """<|think|>
+You are decomposing contraindication spans that contain coordinated phrases
+into atomic contraindication concepts.
+
+Apply these rules in order:
+
+RULE 1 — SHARED MODIFIER WITH CONJUNCTION
+Pattern: "[concept A] and [concept B]" sharing a head noun or modifier
+Action: Emit one item per coordinate, distributing the shared modifier.
+Example: "viral diseases of the eye and ear"
+  → "viral diseases of the eye"
+  → "viral diseases of the ear"
+
+RULE 2 — DISJUNCTIVE CAUSATIVE AGENT
+Pattern: "[condition] after/following/to [X] or [Y]"
+Action: Emit one item per causative agent.
+Example: "fever after taking aspirin or other NSAIDs"
+  → "fever after taking aspirin"
+  → "fever after taking other NSAIDs"
+
+RULE 2 CAUTION — DISTRIBUTED HEAD NOUN: When the last item in the disjunction is a
+compound noun ("[Z]-containing [W]", "[Z]-based [W]") and earlier items are bare
+modifiers lacking the head noun "[W]", distribute "[W]" to ALL items.
+Example: "allergic reaction after diphtheria toxoid, tetanus toxoid, or pertussis-containing vaccine"
+  → "allergic reaction after diphtheria toxoid-containing vaccine"
+  → "allergic reaction after tetanus toxoid-containing vaccine"
+  → "allergic reaction after pertussis-containing vaccine"
+NOT: "after diphtheria toxoid" (bare — missing the shared head noun "vaccine")
+
+RULE 3 — ENUMERATED LIST
+Pattern: "[concept A], [concept B], [concept C]" as a list
+Action: Emit one item per listed concept.
+
+RULE 4 — POPULATION + CONDITION CONJUNCTION
+Pattern: "[condition] in [population A] and [population B]"
+Action: Emit one item per population if populations are clinically distinct.
+Example: "contraindicated in pregnant women and nursing mothers"
+  → "use in pregnant women"
+  → "use in nursing mothers"
+
+RULE 0 — NO SPLIT
+If none of the above patterns apply, return the span unchanged as a 
+single item.
+
+GUARD: After splitting, verify each resulting item is a complete, 
+self-contained contraindication concept. If a split produces a fragment 
+(e.g. "severe hepatic" without a noun), do not split — return Rule 0.
+
+Use the source_sentence field to resolve ambiguous modifier scope.
+
+Output format:
+{ "items": [{"ci_text": "<atomic span>", "split_applied": "<RULE_N or RULE_0>", "original_span": "<original input span>"}}<<END_JSON>>
+The JSON must end with the exact token:<<END_JSON>>
+"""
+DECOMPOSE_USER_PROMPT = """
+Here is a contraindication span extracted from the text.
+contraindication span: {ci_text}
+Please apply the decomposition rules as specified. 
 """
 
 # ---------------------------------------------
@@ -507,3 +607,447 @@ def extract_contraindication_items(
             return items, last_raw
 
     return [], last_raw
+
+
+def build_decompose_user_prompt(item: Dict[str, Any]) -> str:
+    return DECOMPOSE_USER_PROMPT.format(ci_text=item.get("ci_text", ""))
+
+
+def decompose_contraindication_item(
+    chat_fn: Any,
+    item: Dict[str, Any],
+    *,
+    max_tokens: int = 512,
+    stop: Optional[List[str]] = None,
+    retries: int = 1,
+    retry_token_increment: int = 256,
+) -> Tuple[List[Dict[str, Any]], str]:
+    messages = build_message(DECOMPOSE_SYSTEM_PROMPT, build_decompose_user_prompt(item))
+    last_raw = ""
+    attempts = max(1, retries + 1)
+    for attempt in range(attempts):
+        run_tokens = max_tokens + (attempt * retry_token_increment)
+        last_raw = chat_fn(messages, max_tokens=run_tokens, stop=stop)
+        items = parse_contra_extraction_output(last_raw)
+        if items or has_end_json_token(last_raw, token=END_JSON_TOKEN, require_terminal=False):
+            return items if items else [item], last_raw
+    return [item], last_raw  # fallback: return original item unchanged
+
+
+# ---------------------------------------------
+# Prompt 06: CATEGORIZE SLOTS (Agent 2 — Compositional Extractor)
+# System prompt loaded from agents/snomed_conventions.md at first call.
+# ---------------------------------------------
+
+_CONVENTIONS_CACHE: str = ""
+
+
+def _load_snomed_conventions() -> str:
+    global _CONVENTIONS_CACHE
+    if not _CONVENTIONS_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "snomed_conventions.md"
+        if p.exists():
+            _CONVENTIONS_CACHE = p.read_text(encoding="utf-8")
+    return _CONVENTIONS_CACHE
+
+
+CATEGORIZE_SLOTS_USER_PROMPT = """Contraindication span:
+{ci_text}
+
+Identify each clinical component and tag it with its SNOMED CT hierarchy.
+Return minified JSON with key "components" followed by <<END_JSON>>.
+Example: {{"components": [{{"text": "ibuprofen", "hierarchy": "Substance", "role": "causative_agent"}}]}}<<END_JSON>>
+"""
+
+
+def parse_categorize_slots_output(text: str) -> List[Dict[str, Any]]:
+    cleaned = trim_after_end_json_token(text, token=END_JSON_TOKEN, include_token=False)
+    parsed = extract_json(cleaned)
+    if not isinstance(parsed, dict):
+        return []
+    # Accept both "components" (canonical) and "segments" (LLM variant)
+    components = parsed.get("components") or parsed.get("segments") or []
+    if not isinstance(components, list):
+        return []
+    return [
+        c for c in components
+        if isinstance(c, dict)
+        # Accept both "text" (canonical) and "span" (LLM variant)
+        and (c.get("text") or c.get("span"))
+        and c.get("hierarchy")
+    ]
+
+
+def categorize_item_slots(
+    chat_fn: Any,
+    item: Dict[str, Any],
+    *,
+    max_tokens: int = 256,
+    stop: Optional[List[str]] = None,
+    retries: int = 1,
+    retry_token_increment: int = 128,
+) -> Tuple[List[Dict[str, Any]], str]:
+    system = _load_snomed_conventions()
+    if not system:
+        return [], ""
+    messages = build_message(system, CATEGORIZE_SLOTS_USER_PROMPT.format(
+        ci_text=item.get("ci_text", "")
+    ))
+    last_raw = ""
+    attempts = max(1, retries + 1)
+    for attempt in range(attempts):
+        run_tokens = max_tokens + (attempt * retry_token_increment)
+        last_raw = chat_fn(messages, max_tokens=run_tokens, stop=stop)
+        components = parse_categorize_slots_output(last_raw)
+        if components or has_end_json_token(last_raw, token=END_JSON_TOKEN, require_terminal=False):
+            return components, last_raw
+    return [], last_raw
+
+
+# ---------------------------------------------
+# Prompt 07: FOCUS SELECTOR (Agent 2.5 — ReAct focus concept selection)
+# System prompt loaded from agents/focus_selector.md at first call.
+# ---------------------------------------------
+
+_FOCUS_SELECTOR_CACHE: str = ""
+
+
+def _load_focus_selector() -> str:
+    global _FOCUS_SELECTOR_CACHE
+    if not _FOCUS_SELECTOR_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "focus_selector.md"
+        if p.exists():
+            _FOCUS_SELECTOR_CACHE = p.read_text(encoding="utf-8")
+    return _FOCUS_SELECTOR_CACHE
+
+
+def build_focus_selector_user_prompt(
+    item: Dict[str, Any],
+    slot_hierarchies: Dict[str, Any],
+) -> str:
+    lines: List[str] = []
+    lines.append(f"FULL CONTRAINDICATION: {item.get('ci_text', '')}")
+    lines.append("\nAGENT 2 COMPONENTS (use these to identify the focus component):")
+    for text, meta in slot_hierarchies.items():
+        hier = meta.get("hierarchy", "?")
+        resolved = meta.get("resolved_preferred_term") or text
+        lines.append(f"  [{hier}] {resolved}")
+    lines.append(
+        "\nCall search_snomed on the focus component text to retrieve candidates. "
+        "Verify abstract/pre-coordinated status with get_logical_definition. "
+        "Return final answer with <<END_JSON>>."
+    )
+    return "\n".join(lines)
+
+
+def parse_focus_selector_output(raw: str) -> Dict[str, Any]:
+    """
+    Parses either a tool call or a final answer from the focus selector LLM output.
+
+    Tool call:  {"tool": "...", "args": {...}}
+    Final answer: {"focus_sctid": "...", "reasoning": "..."}<<END_JSON>>
+    """
+    cleaned = trim_after_end_json_token(raw, token=END_JSON_TOKEN, include_token=False)
+    # Try final answer first (has END_JSON_TOKEN)
+    if has_end_json_token(raw, token=END_JSON_TOKEN, require_terminal=False):
+        parsed = extract_json(cleaned)
+        if isinstance(parsed, dict) and "focus_sctid" in parsed:
+            return parsed
+
+    # Try tool call (no END_JSON_TOKEN — raw JSON object)
+    parsed = extract_json(raw)
+    if isinstance(parsed, dict) and "tool" in parsed:
+        return parsed
+
+    return {}
+
+
+# ---------------------------------------------
+# Prompt 07b: DIRECT MATCH AGENT (ReAct upgrade of direct_match_node)
+# System prompt loaded from agents/direct_match_agent.md at first call.
+# ---------------------------------------------
+
+_DIRECT_MATCH_AGENT_CACHE: str = ""
+
+
+def _load_direct_match_agent() -> str:
+    global _DIRECT_MATCH_AGENT_CACHE
+    if not _DIRECT_MATCH_AGENT_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "direct_match_agent.md"
+        if p.exists():
+            _DIRECT_MATCH_AGENT_CACHE = p.read_text(encoding="utf-8")
+    return _DIRECT_MATCH_AGENT_CACHE
+
+
+def build_direct_match_agent_user_prompt(ci_text: str) -> str:
+    return (
+        f"CONTRAINDICATION TEXT: {ci_text}\n\n"
+        "Formulate a normalized search query, call search_snomed to retrieve candidates, "
+        "verify the top result with get_logical_definition, then decide direct match or not. "
+        "Return final answer with <<END_JSON>>."
+    )
+
+
+def parse_direct_match_agent_output(raw: str) -> Dict[str, Any]:
+    """
+    Parses either a tool call or a final answer from the direct match agent.
+
+    Tool call:    {"tool": "...", "args": {...}}
+    Final answer: {"direct_match": true/false, "selected_id": "...", ...}<<END_JSON>>
+    """
+    cleaned = trim_after_end_json_token(raw, token=END_JSON_TOKEN, include_token=False)
+    if has_end_json_token(raw, token=END_JSON_TOKEN, require_terminal=False):
+        parsed = extract_json(cleaned)
+        if isinstance(parsed, dict) and "direct_match" in parsed:
+            return parsed
+
+    parsed = extract_json(raw)
+    if isinstance(parsed, dict) and "tool" in parsed:
+        return parsed
+
+    return {}
+
+
+# ---------------------------------------------
+# Prompt 08: PATTERN FINDER (Agent 3 — Post-Coordination Expression Agent)
+# System prompt loaded from agents/postcord_agent.md at first call.
+# ---------------------------------------------
+
+_POSTCORD_AGENT_CACHE: str = ""
+
+
+def _load_postcord_agent() -> str:
+    global _POSTCORD_AGENT_CACHE
+    if not _POSTCORD_AGENT_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "postcord_agent.md"
+        if p.exists():
+            _POSTCORD_AGENT_CACHE = p.read_text(encoding="utf-8")
+    return _POSTCORD_AGENT_CACHE
+
+
+def build_pattern_finder_user_prompt(
+    item: Dict[str, Any],
+    analogues_context: Dict[str, Any],
+    fills_norm: Dict[str, str],
+    selected_problem_id: str,
+    fills_detail: Optional[Dict[str, Any]] = None,
+) -> str:
+    lines: List[str] = []
+
+    # Structural context block (from Neo4j)
+    if analogues_context:
+        lines.append("=== STRUCTURAL CONTEXT (from SNOMED CT ontology) ===")
+
+        ancestors = analogues_context.get("ancestors", {})
+        if ancestors:
+            lines.append(f"\nANCESTORS of focus concept {selected_problem_id}:")
+            for anc_id, depth in list(ancestors.items())[:8]:
+                lines.append(f"  [{depth} hops] {anc_id}")
+
+        focus_roles = analogues_context.get("focus_roles", [])
+        if focus_roles:
+            lines.append(f"\nROLE RELATIONSHIPS of focus concept {selected_problem_id}:")
+            for r in focus_roles[:10]:
+                lines.append(f"  {r.get('type_fsn','?')} → {r.get('destination_preferred_term','?')} ({r.get('destination_sctid','?')})")
+
+        for slot_key in ("causative_agent", "severity", "clinical_course"):
+            slot_roles = analogues_context.get(f"{slot_key}_roles", [])
+            slot_id = fills_norm.get(slot_key, "N/A")
+            if slot_roles:
+                lines.append(f"\nROLE RELATIONSHIPS of {slot_key} concept {slot_id}:")
+                for r in slot_roles[:6]:
+                    lines.append(f"  {r.get('type_fsn','?')} → {r.get('destination_preferred_term','?')}")
+    else:
+        lines.append("=== STRUCTURAL CONTEXT: none available ===")
+
+    lines.append("\n=== CURRENT MAPPING ===")
+    focus_term = (fills_detail or {}).get("focus", {}).get("term", "N/A") if fills_detail else "N/A"
+    lines.append(f"FOCUS: {selected_problem_id} | {focus_term}")
+    for slot_key in ("causative_agent", "severity", "clinical_course"):
+        slot_id = fills_norm.get(slot_key, "N/A")
+        slot_term = (fills_detail or {}).get(slot_key, {}).get("term", "N/A") if fills_detail else "N/A"
+        lines.append(f"{slot_key.upper()}: {slot_id} | {slot_term}")
+
+    lines.append(f"\n=== CONTRAINDICATION TEXT ===\n{item.get('ci_text', '')}")
+    lines.append("\nPropose refined post-coordinated expression. Return minified JSON followed by <<END_JSON>>.")
+    return "\n".join(lines)
+
+
+def parse_pattern_finder_output(text: str) -> Dict[str, Any]:
+    cleaned = trim_after_end_json_token(text, token=END_JSON_TOKEN, include_token=False)
+    parsed = extract_json(cleaned)
+    if not isinstance(parsed, dict):
+        return {}
+    if "proposed_focus_id" not in parsed and "decision" not in parsed:
+        return {}
+    return parsed
+
+
+def run_pattern_finder(
+    chat_fn: Any,
+    item: Dict[str, Any],
+    analogues_context: Dict[str, Any],
+    fills_norm: Dict[str, str],
+    selected_problem_id: str,
+    fills_detail: Optional[Dict[str, Any]] = None,
+    *,
+    max_tokens: int = 256,
+    stop: Optional[List[str]] = None,
+    retries: int = 1,
+    retry_token_increment: int = 128,
+) -> Tuple[Dict[str, Any], str]:
+    system = _load_postcord_agent()
+    if not system:
+        return {}, ""
+    user = build_pattern_finder_user_prompt(
+        item, analogues_context, fills_norm, selected_problem_id, fills_detail
+    )
+    messages = build_message(system, user)
+    last_raw = ""
+    attempts = max(1, retries + 1)
+    for attempt in range(attempts):
+        run_tokens = max_tokens + (attempt * retry_token_increment)
+        last_raw = chat_fn(messages, max_tokens=run_tokens, stop=stop)
+        parsed = parse_pattern_finder_output(last_raw)
+        if parsed or has_end_json_token(last_raw, token=END_JSON_TOKEN, require_terminal=False):
+            return parsed, last_raw
+    return {}, last_raw
+
+
+# ---------------------------------------------
+# Prompt 09: MRCM ATTRIBUTE MAPPER (Agent 3 v2)
+# System prompt loaded from agents/postcord_agent.md at first call.
+# Replaces pattern_finder when MRCM_MAPPER_ENABLED=1.
+# ---------------------------------------------
+
+def build_mrcm_mapper_user_prompt(
+    item: Dict[str, Any],
+    slot_hierarchies: Dict[str, Any],
+    component_candidates: List[Dict[str, Any]],
+    mrcm_rules: List[Dict[str, Any]],
+    focus_sctid: str,
+    focus_term: str,
+) -> str:
+    lines: List[str] = []
+    lines.append(f"FOCUS CONCEPT: {focus_sctid} | {focus_term}")
+    lines.append(f"CONTRAINDICATION: {item.get('ci_text', '')}")
+
+    lines.append("\nMRCM ALLOWED ATTRIBUTES:")
+    if mrcm_rules:
+        for rule in mrcm_rules:
+            attr_sctid = rule.get("attribute_sctid", "?")
+            attr_name  = rule.get("attribute_name", "?")
+            range_ecl  = rule.get("range_constraint", "")[:80]
+            lines.append(f"  {attr_sctid} | {attr_name} | range: {range_ecl}")
+    else:
+        lines.append("  (no MRCM rules available — use standard post-coordination attributes)")
+
+    focus_tags = {"clinical finding", "procedure", "disorder", "finding", "regime/therapy"}
+    lines.append("\nNON-FOCUS COMPONENTS (from Agent 2):")
+    has_non_focus = False
+    for text, meta in slot_hierarchies.items():
+        if meta.get("hierarchy", "").lower() not in focus_tags:
+            resolved = meta.get("resolved_preferred_term") or text
+            lines.append(f"  [{meta.get('hierarchy', '?')}] {resolved}")
+            has_non_focus = True
+    if not has_non_focus:
+        lines.append("  (none identified)")
+
+    lines.append(f"\nCANDIDATE POOL ({len(component_candidates)} candidates):")
+    for i, c in enumerate(component_candidates[:15], 1):
+        cid   = c.get("id", "?")
+        label = c.get("label") or c.get("term", "?")
+        src   = c.get("source_hierarchy", "?")
+        lines.append(f"  {i}) {cid} | {label} | source_hierarchy={src}")
+
+    lines.append(
+        "\nAssign each non-focus component to an allowed MRCM attribute and select "
+        "the best matching value from the candidate pool. "
+        "Return minified JSON followed by <<END_JSON>>."
+    )
+    return "\n".join(lines)
+
+
+def build_mrcm_mapper_react_user_prompt(
+    item: Dict[str, Any],
+    focus_sctid: str,
+    focus_term: str,
+    slot_hierarchies: Dict[str, Any],
+) -> str:
+    """Initial prompt for the ReAct mrcm_attribute_mapper loop.
+    The agent discovers MRCM attributes and searches for values via tools.
+    """
+    lines: List[str] = []
+    lines.append(f"FOCUS CONCEPT: {focus_sctid} | {focus_term}")
+    lines.append(f"CONTRAINDICATION: {item.get('ci_text', '')}")
+
+    focus_tags = {"clinical finding", "procedure", "disorder", "finding", "regime/therapy"}
+    lines.append("\nNON-FOCUS COMPONENTS (from Agent 2):")
+    has_non_focus = False
+    for text, meta in slot_hierarchies.items():
+        if meta.get("hierarchy", "").lower() not in focus_tags:
+            resolved = meta.get("resolved_preferred_term") or text
+            lines.append(f"  [{meta.get('hierarchy', '?')}] {resolved}")
+            has_non_focus = True
+    if not has_non_focus:
+        lines.append("  (none identified)")
+
+    lines.append(
+        "\nStart by calling get_domain_attributes to discover valid MRCM attributes "
+        "for this focus concept. Then use search_snomed to find values for each "
+        "non-focus component and return refinements[]."
+    )
+    return "\n".join(lines)
+
+
+def parse_mrcm_mapper_output(raw: str) -> Dict[str, Any]:
+    """
+    Parses either a tool call or a final answer from the mrcm_attribute_mapper agent.
+
+    Tool call:    {"tool": "...", "args": {...}}
+    Final answer: {"decision": "...", "refinements": [...], "confidence": ...}<<END_JSON>>
+    """
+    cleaned = trim_after_end_json_token(raw, token=END_JSON_TOKEN, include_token=False)
+    if has_end_json_token(raw, token=END_JSON_TOKEN, require_terminal=False):
+        parsed = extract_json(cleaned)
+        if isinstance(parsed, dict) and ("refinements" in parsed or "decision" in parsed):
+            return parsed
+
+    # Tool call (no END_JSON_TOKEN)
+    parsed = extract_json(raw)
+    if isinstance(parsed, dict) and "tool" in parsed:
+        return parsed
+
+    return {}
+
+
+def run_mrcm_mapper(
+    chat_fn: Any,
+    item: Dict[str, Any],
+    slot_hierarchies: Dict[str, Any],
+    component_candidates: List[Dict[str, Any]],
+    mrcm_rules: List[Dict[str, Any]],
+    focus_sctid: str,
+    focus_term: str,
+    *,
+    max_tokens: int = 512,
+    stop: Optional[List[str]] = None,
+    retries: int = 1,
+    retry_token_increment: int = 128,
+) -> Tuple[Dict[str, Any], str]:
+    system = _load_postcord_agent()
+    if not system:
+        return {}, ""
+    user = build_mrcm_mapper_user_prompt(
+        item, slot_hierarchies, component_candidates, mrcm_rules, focus_sctid, focus_term
+    )
+    messages = build_message(system, user)
+    last_raw = ""
+    attempts = max(1, retries + 1)
+    for attempt in range(attempts):
+        run_tokens = max_tokens + (attempt * retry_token_increment)
+        last_raw = chat_fn(messages, max_tokens=run_tokens, stop=stop)
+        parsed = parse_mrcm_mapper_output(last_raw)
+        if parsed or has_end_json_token(last_raw, token=END_JSON_TOKEN, require_terminal=False):
+            return parsed, last_raw
+    return {}, last_raw

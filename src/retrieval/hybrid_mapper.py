@@ -3,7 +3,7 @@ from __future__ import annotations
 import glob
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
@@ -150,6 +150,7 @@ class MapperResources:
     n_final: Optional[int] = None
     cross_encoder: Optional[Any] = None
     is_a_graph: Optional[Any] = None
+    hierarchy_map: Optional[Dict[int, str]] = None
 
 
 _RESOURCE_CACHE: Dict[Tuple[Any, ...], MapperResources] = {}
@@ -444,6 +445,7 @@ def get_cached_mapper_resources(
     reranker_model_id: str = "",
     reranker_device: str = "cpu",
     bm25_b: float = 0.5,
+    graph_client: Optional[Any] = None,
 ) -> MapperResources:
     cache_key = (
         snomed_source_dir,
@@ -486,7 +488,65 @@ def get_cached_mapper_resources(
             bm25_b=bm25_b,
         )
         _RESOURCE_CACHE[cache_key] = resources
+
+    # Enrich with hierarchy_map from Neo4j on first call that provides a graph_client
+    if graph_client is not None and resources.hierarchy_map is None:
+        resources = replace(resources, hierarchy_map=graph_client.get_hierarchy_map())
+        _RESOURCE_CACHE[cache_key] = resources
+
+    # Apply USE_ANCESTOR_PATHS env var (evaluated per-call, not cached)
+    use_ancestor_paths = os.environ.get("USE_ANCESTOR_PATHS", "1").lower() not in {"0", "false", "no"}
+    if not use_ancestor_paths:
+        resources = replace(resources, is_a_graph=None)
+
     return resources
+
+
+def search_snomed_concepts(
+    query: str,
+    resources: MapperResources,
+    hierarchy_filter: Optional[str] = None,
+    k: int = 10,
+) -> List[Dict[str, Any]]:
+    """
+    BM25+FAISS hybrid search for agent tool use.
+
+    Calls search_query() with the standard SNOMED field names and returns up to k
+    candidates. Each candidate dict has at minimum: id, label, score, ancestor_path,
+    top_level_hierarchy, semantic_tag.
+
+    hierarchy_filter: optional top_level_hierarchy value (e.g. "Clinical Finding",
+    "Substance") — applied post-retrieval so the RRF ranking is unaffected.
+    """
+    if not query.strip():
+        return []
+    fetch_k = k * 5 if hierarchy_filter else k
+    hits = search_query(
+        query_text=query,
+        model=resources.st_model,
+        faiss_index=resources.faiss_index,
+        concept_meta_df=resources.concept_meta_df,
+        es=resources.es,
+        bm25_index=resources.bm25_index,
+        label_column="term",
+        bm25_text_field="preferredTerm",
+        bm25_id_field="conceptId",
+        bm25_label_field="preferredTerm",
+        k_dense=resources.k_dense,
+        k_bm25=resources.k_bm25,
+        k_final=fetch_k,
+        n_final=fetch_k,
+        normalize_query=True,
+        cross_encoder=resources.cross_encoder,
+        is_a_graph=resources.is_a_graph,
+        hierarchy_map=resources.hierarchy_map,
+    )
+    if hierarchy_filter:
+        hits = [
+            h for h in hits
+            if h.get("top_level_hierarchy", "").lower() == hierarchy_filter.lower()
+        ]
+    return hits[:k]
 
 
 def retrieve_candidates_for_item(

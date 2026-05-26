@@ -66,20 +66,28 @@ def build_faiss_index(
     
 def maybe_move_index_to_gpu(index: faiss.Index) -> faiss.Index:
     """
-    If GPUs are available, move a CPU FAISS index to GPU and return it.
-    If no GPUs are available, returns the original CPU index.
+    Move a CPU FAISS index to GPU for querying.
 
-    Note: This is intended for querying. The on-disk index should remain CPU.
-    Device 0 here is the first GPU visible to the current process after any
-    CUDA_VISIBLE_DEVICES masking has been applied.
+    Uses MAPPER_FAISS_GPU_DEVICE env var to select the device (int index into
+    the visible GPU list). Defaults to the LAST visible GPU so the main LLM can
+    occupy the first N-1 devices without conflict.
+    Set MAPPER_FAISS_GPU_DEVICE=-1 to keep the index on CPU.
     """
-    if faiss.get_num_gpus() == 0:
+    import os
+    n_gpus = faiss.get_num_gpus()
+    if n_gpus == 0:
         print("No GPUs detected by FAISS; keeping index on CPU.")
         return index
 
-    print("Moving FAISS index to GPU (first visible device, FAISS device 0)...")
+    raw = os.environ.get("MAPPER_FAISS_GPU_DEVICE", "").strip()
+    if raw == "-1":
+        print("MAPPER_FAISS_GPU_DEVICE=-1; keeping FAISS index on CPU.")
+        return index
+
+    faiss_device = int(raw) if raw else (n_gpus - 1)  # default: last visible GPU
+    print(f"Moving FAISS index to GPU (FAISS device {faiss_device} of {n_gpus} visible)...")
     res = faiss.StandardGpuResources()
-    gpu_index = faiss.index_cpu_to_gpu(res, 0, index)
+    gpu_index = faiss.index_cpu_to_gpu(res, faiss_device, index)
     print("Index moved to GPU successfully.")
     return gpu_index
 
