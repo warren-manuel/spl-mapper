@@ -544,6 +544,9 @@ def parse_contra_extraction_output(text: str) -> List[Dict[str, Any]]:
 def _build_ingredient_block(ingredients: Optional[Dict[str, List[str]]]) -> str:
     """Return an 'Available Ingredients:' context line for injection into the extraction prompt.
 
+    Uses a plain pipe-delimited format (not JSON) so the LLM can copy ingredient names
+    verbatim into ci_text without any JSON escaping concerns.
+
     Returns an empty string when ingredients is None or both lists are empty so that callers
     can safely substitute it into any template with ``{ingredient_block}``.
     """
@@ -551,9 +554,10 @@ def _build_ingredient_block(ingredients: Optional[Dict[str, List[str]]]) -> str:
         return ""
     active = ingredients.get("active", [])
     inactive = ingredients.get("inactive", [])
-    if not active and not inactive:
+    all_ingredients = [*active, *inactive]
+    if not all_ingredients:
         return ""
-    return f'Available Ingredients: {json.dumps({"active": active, "inactive": inactive})}'
+    return "Available Ingredients: " + " | ".join(all_ingredients)
 
 
 def extract_contraindication_items(

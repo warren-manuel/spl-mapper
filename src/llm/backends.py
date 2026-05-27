@@ -434,7 +434,7 @@ def _salvage_items_from_text(text: str) -> Optional[Dict[str, Any]]:
                 oo = o.replace(",}", "}")  # mild repair
                 try:
                     d = json.loads(oo)
-                    if isinstance(d, dict) and ("condition_text" in d or "span_text" in d):
+                    if isinstance(d, dict) and ("ci_text" in d or "condition_text" in d or "span_text" in d):
                         items.append(d)
                 except Exception:
                     continue
@@ -448,7 +448,7 @@ def _salvage_items_from_text(text: str) -> Optional[Dict[str, Any]]:
         oo = o.replace(",}", "}")
         try:
             d = json.loads(oo)
-            if isinstance(d, dict) and ("condition_text" in d or "span_text" in d):
+            if isinstance(d, dict) and ("ci_text" in d or "condition_text" in d or "span_text" in d):
                 items.append(d)
         except Exception:
             continue

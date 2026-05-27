@@ -25,16 +25,16 @@ Do NOT:
 ---
 
 INGREDIENT CONTEXT (optional):
-If an "Available Ingredients" line is present in the prompt, and an extracted span contains
+If an "Available Ingredients:" line is present in the prompt, and an extracted span contains
 "any component", "any ingredient", "a component of [product]", or "an ingredient of [product]",
 append the following suffix to that specific ci_text — and ONLY to spans containing such phrases:
 
-  . Ingredients/Components: <copy the Available Ingredients JSON verbatim>
+  . Components: <copy the Available Ingredients list verbatim, everything after "Available Ingredients: ">
 
 Example:
   Span: "anaphylaxis after any component of DAPTACEL"
-  Available Ingredients: {"active": ["TOXOID A", "TOXOID B"], "inactive": ["ALUMINUM PHOSPHATE"]}
-  → ci_text: "anaphylaxis after any component of DAPTACEL. Ingredients/Components: {"active": ["TOXOID A", "TOXOID B"], "inactive": ["ALUMINUM PHOSPHATE"]}"
+  Available Ingredients: TOXOID A | TOXOID B | ALUMINUM PHOSPHATE
+  → ci_text: "anaphylaxis after any component of DAPTACEL. Components: TOXOID A | TOXOID B | ALUMINUM PHOSPHATE"
 
 Do NOT append the suffix to spans that already name specific substances
 (e.g., "diphtheria toxoid-containing vaccine", "neomycin", "latex").

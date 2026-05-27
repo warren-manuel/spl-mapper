@@ -44,22 +44,19 @@ Example: "contraindicated in pregnant women and nursing mothers"
   → "use in nursing mothers"
 
 RULE 5 — INGREDIENT LIST EXPANSION
-Pattern: ci_text ends with ". Ingredients/Components: <JSON>"
+Pattern: ci_text ends with ". Components: <pipe-delimited list>"
 Action:
-  1. Strip the ". Ingredients/Components: <JSON>" suffix to obtain the base_span.
-  2. Parse the JSON to get active[] and inactive[] ingredient name lists.
-  3. For each ingredient (active first, then inactive), emit one item:
+  1. Strip the ". Components: <list>" suffix to obtain the base_span.
+  2. Split the suffix on " | " to get ingredient names.
+  3. For each ingredient name, emit one item:
      - ci_text = base_span with "any component [of PRODUCT]" or "any ingredient [of PRODUCT]"
        replaced by the ingredient name (keep all surrounding clinical text intact).
      - split_applied = "RULE_5"
-     - original_span = the full original ci_text (including the suffix)
   4. Apply DEDUPLICATION GUARD across the emitted items.
-  5. If the parsed ingredient list is empty, fall through to RULE 0 on the base_span.
+  5. If the ingredient list is empty, fall through to RULE 0 on the base_span.
 
 Example:
-  Input ci_text: "anaphylaxis after any component of DAPTACEL.
-    Ingredients/Components: {"active": ["BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED)"],
-    "inactive": ["ALUMINUM PHOSPHATE", "FORMALDEHYDE"]}"
+  Input ci_text: "anaphylaxis after any component of DAPTACEL. Components: BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED) | ALUMINUM PHOSPHATE | FORMALDEHYDE"
   base_span: "anaphylaxis after any component of DAPTACEL"
   → ci_text: "anaphylaxis after BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED)"  (RULE_5)
   → ci_text: "anaphylaxis after ALUMINUM PHOSPHATE"                                  (RULE_5)
