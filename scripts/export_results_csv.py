@@ -33,14 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.evaluation.evaluator import write_csv_rows  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# SNOMED attribute SCTID + canonical FSN for each fills slot name
-# ---------------------------------------------------------------------------
-SLOT_TO_ATTR: dict[str, tuple[str, str]] = {
-    "causative_agent": ("246075003", "Causative agent (attribute)"),
-    "severity":        ("246112005", "Severity (attribute)"),
-    "clinical_course": ("263502005", "Clinical course (attribute)"),
-}
+# (SLOT_TO_ATTR removed — fills slot is always empty; refinements are read from
+#  trace.postcoord_pattern.refinements instead)
 
 FIELDNAMES = [
     "SPL_SET_ID",
@@ -80,26 +74,28 @@ def _build_fsn_lookup(snomed_source_dir: str) -> dict[int, str]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _extract_attributes(fills: dict) -> tuple[str, str, str, str]:
+def _extract_refinements(item: dict) -> tuple[str, str, str, str]:
     """Return four pipe-delimited strings for the attribute/value columns.
 
-    Iterates the fixed fills slots in declaration order and skips any slot
-    whose value id is "N/A" or absent.
+    Reads from ``trace.postcoord_pattern.refinements``, which is a list of dicts:
+        {attribute_sctid, attribute_fsn, value_sctid, value_term}
+
+    Returns empty strings when no refinements are present.
     """
+    refinements: list[dict] = (
+        ((item.get("trace") or {}).get("postcoord_pattern") or {}).get("refinements") or []
+    )
+
     attr_ids:  list[str] = []
     attr_fsns: list[str] = []
     val_ids:   list[str] = []
     val_fsns:  list[str] = []
 
-    for slot, (attr_sctid, attr_fsn) in SLOT_TO_ATTR.items():
-        slot_data = fills.get(slot) or {}
-        vid = slot_data.get("id", "N/A")
-        if not vid or vid == "N/A":
-            continue
-        attr_ids.append(attr_sctid)
-        attr_fsns.append(attr_fsn)
-        val_ids.append(vid)
-        val_fsns.append(slot_data.get("term", "N/A"))
+    for ref in refinements:
+        attr_ids.append(str(ref.get("attribute_sctid", "")))
+        attr_fsns.append(str(ref.get("attribute_fsn", "")))
+        val_ids.append(str(ref.get("value_sctid", "")))
+        val_fsns.append(str(ref.get("value_term", "")))
 
     sep = " | "
     return sep.join(attr_ids), sep.join(attr_fsns), sep.join(val_ids), sep.join(val_fsns)
@@ -162,7 +158,7 @@ def _item_to_row(
         concept_fsn = "N/A"
         status_out  = status_raw.lower() if status_raw else "unknown"
 
-    attr_ids, attr_fsns, val_ids, val_fsns = _extract_attributes(item.get("fills") or {})
+    attr_ids, attr_fsns, val_ids, val_fsns = _extract_refinements(item)
 
     return {
         "SPL_SET_ID":                 item.get("SPL_SET_ID", ""),
