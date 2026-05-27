@@ -5,6 +5,7 @@ import re
 DAILYMED_BASE = "https://dailymed.nlm.nih.gov/dailymed/services/v2"
 CONTRA_Loinc = "34070-3"
 ADVERSE_Loinc = "34084-4"
+INGR_Loinc = "48780-1"  # SPL product data elements section (contains ingredient list)
 # https://dailymed.nlm.nih.gov/dailymed/services/v2/spls/{SETID}.xml
 
 class DailyMedError(Exception):
@@ -155,6 +156,55 @@ def section_text(section_el: etree._Element) -> str:
     parts: list[str] = []
     _walk_narrative(text_el, parts)
     return _normalize_narrative_text("".join(parts))
+
+def extract_ingredient_names(root: etree._Element) -> dict:
+    """
+    Extract active and inactive ingredient names from the SPL product data elements
+    section (LOINC 48780-1).
+
+    Active:   classCode in {"ACTIB", "ACTIM"}
+    Inactive: classCode == "IACT"
+
+    Returns:
+        {"active": sorted list of names, "inactive": sorted list of names}
+    """
+    ns = {"hl7": get_default_ns(root)}
+    actives: list[str] = []
+    inactives: list[str] = []
+
+    for ingr in root.xpath(".//hl7:ingredient", namespaces=ns):
+        class_code = ingr.get("classCode", "").upper()
+        name_els = ingr.xpath(
+            ".//hl7:ingredientSubstance/hl7:name", namespaces=ns
+        )
+        if not name_els:
+            continue
+        name = (name_els[0].text or "").strip()
+        if not name:
+            continue
+        if class_code in ("ACTIB", "ACTIM"):
+            actives.append(name)
+        elif class_code == "IACT":
+            inactives.append(name)
+
+    return {
+        "active": sorted(set(actives)),
+        "inactive": sorted(set(inactives)),
+    }
+
+
+def extract_ingredients(setid: str) -> dict:
+    """
+    Fetch the SPL XML for the given SETID and return active/inactive ingredient names.
+    Returns {"active": [], "inactive": []} on any network or parse failure.
+    """
+    try:
+        xml_bytes = fetch_spl_xml_by_setid(setid)
+        root = parse_xml(xml_bytes)
+        return extract_ingredient_names(root)
+    except Exception:
+        return {"active": [], "inactive": []}
+
 
 def extract_section(setid: str, loinc_code: list[str]) -> dict:
     """

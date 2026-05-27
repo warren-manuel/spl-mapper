@@ -41,9 +41,11 @@ Read the pipe-notation labels in the ECL and map to one of these canonical names
 | `\|Pharmaceutical / biologic product (product)\|` | `Pharmaceutical/Biological Product` |
 | `\|Organism (organism)\|` | `Organism` |
 | `\|Body structure (body structure)\|` | `Body Structure` |
+| `\|Observable entity (observable entity)\|` | `Observable Entity` |
 | `\|Qualifier value (qualifier value)\|` | `Qualifier Value` |
 | `\|Clinical finding (finding)\|` | `Clinical Finding` |
 | `\|Procedure (procedure)\|` | `Procedure` |
+| `\|Attribute (attribute)\|` | `Attribute` |
 
 When the range has multiple OR branches (e.g. Substance OR Pharmaceutical Product OR
 Organism), **use the Agent 2 hierarchy label on the component as the primary guide**:
@@ -120,8 +122,9 @@ the `range_constraint` field — do NOT pass the ECL to `search_snomed` directly
 
 **`search_snomed(query, hierarchy_filter?, k?)`**
 BM25+FAISS hybrid search. `hierarchy_filter` accepts ONLY canonical names:
-`Substance`, `Pharmaceutical/Biological Product`, `Organism`, `Body Structure`,
-`Qualifier Value`, `Clinical Finding`, `Procedure`. **Never pass an ECL string here.**
+`Clinical Finding`, `Procedure`, `Observable Entity`, `Body Structure`, `Organism`,
+`Substance`, `Pharmaceutical/Biological Product`, `Qualifier Value`, `Attribute`.
+**Never pass an ECL string here.**
 
 **`validate_ecl(sctid, range_ecl)`**
 Checks whether a concept satisfies an MRCM range ECL via Snowstorm.

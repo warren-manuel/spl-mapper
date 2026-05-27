@@ -38,7 +38,7 @@ Only one focus concept is allowed. If two candidates both seem like focus concep
 pick the one whose hierarchy and logical definition best match the components present.
 
 **3. Distinguish from Refinement**
-The focus concept MUST NOT be a Qualifier Value, Substance, Pharmaceutical Product,
+The focus concept MUST NOT be a Qualifier Value, Substance, Pharmaceutical/Biological Product,
 Body Structure, or Organism — these are fills, never focus.
 
 ---

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -159,33 +160,12 @@ Here is the CONTRAINDICATIONS section from a vaccine SPL document:
 # Prompt 01b: SIMPLE IDENTIFICATION (step 1 of two-step extraction)
 # Prompt contents to be supplied — must return {"items":[{"ci_text":"..."},...]}<<END_JSON>>
 # ---------------------------------------------
-SIMPLE_EXTRACT_SYSTEM_PROMPT = """<|think|>
-You are a clinical NLP specialist extracting contraindications from 
-FDA Structured Product Label (SPL) text.
-
-Your task: identify every contraindication span in the text. 
-A contraindication is a specific medical condition, symptom, or event that makes this product inadvisable,
-because it could be harmful or dangerous to the patient.
-
-Return a JSON list of extracted spans. Each span must be:
-- Verbatim or minimally normalized from the source text
-- A single phrase or clause that expresses a single contraindication concept
-- Complete enough to stand alone as a concept
-
-Output format:
-{"items": [{"ci_text": "<span>"}, ...]}<<END_JSON>>
-
-The JSON must end with the exact token:<<END_JSON>>
-
-Do NOT:
-- Add clinical context not present in the source
-- Merge multiple contraindications into one span  
-- Include precautions, warnings, or monitoring instructions
-- Split coordinated phrases — return them as-is; splitting happens separately.
-"""
-SIMPLE_EXTRACT_USER_PROMPT = """    
+# Prompt loaded from agents/extract_agent.md at first call (see _load_extract_agent below).
+SIMPLE_EXTRACT_SYSTEM_PROMPT = ""  # nulled — content moved to agents/extract_agent.md
+SIMPLE_EXTRACT_USER_PROMPT = """
 Here is the section of text from the drug label:
 {text}
+{ingredient_block}
 Please identify any contraindications mentioned in the text and list them clearly.
 """
 # ---------------------------------------------
@@ -194,65 +174,42 @@ Please identify any contraindications mentioned in the text and list them clearl
 # Full item schema: ci_text, contraindication_state_text, substance_text,
 #                   severity_span, clinical_course_span
 # ---------------------------------------------
-DECOMPOSE_SYSTEM_PROMPT = """<|think|>
-You are decomposing contraindication spans that contain coordinated phrases
-into atomic contraindication concepts.
-
-Apply these rules in order:
-
-RULE 1 — SHARED MODIFIER WITH CONJUNCTION
-Pattern: "[concept A] and [concept B]" sharing a head noun or modifier
-Action: Emit one item per coordinate, distributing the shared modifier.
-Example: "viral diseases of the eye and ear"
-  → "viral diseases of the eye"
-  → "viral diseases of the ear"
-
-RULE 2 — DISJUNCTIVE CAUSATIVE AGENT
-Pattern: "[condition] after/following/to [X] or [Y]"
-Action: Emit one item per causative agent.
-Example: "fever after taking aspirin or other NSAIDs"
-  → "fever after taking aspirin"
-  → "fever after taking other NSAIDs"
-
-RULE 2 CAUTION — DISTRIBUTED HEAD NOUN: When the last item in the disjunction is a
-compound noun ("[Z]-containing [W]", "[Z]-based [W]") and earlier items are bare
-modifiers lacking the head noun "[W]", distribute "[W]" to ALL items.
-Example: "allergic reaction after diphtheria toxoid, tetanus toxoid, or pertussis-containing vaccine"
-  → "allergic reaction after diphtheria toxoid-containing vaccine"
-  → "allergic reaction after tetanus toxoid-containing vaccine"
-  → "allergic reaction after pertussis-containing vaccine"
-NOT: "after diphtheria toxoid" (bare — missing the shared head noun "vaccine")
-
-RULE 3 — ENUMERATED LIST
-Pattern: "[concept A], [concept B], [concept C]" as a list
-Action: Emit one item per listed concept.
-
-RULE 4 — POPULATION + CONDITION CONJUNCTION
-Pattern: "[condition] in [population A] and [population B]"
-Action: Emit one item per population if populations are clinically distinct.
-Example: "contraindicated in pregnant women and nursing mothers"
-  → "use in pregnant women"
-  → "use in nursing mothers"
-
-RULE 0 — NO SPLIT
-If none of the above patterns apply, return the span unchanged as a 
-single item.
-
-GUARD: After splitting, verify each resulting item is a complete, 
-self-contained contraindication concept. If a split produces a fragment 
-(e.g. "severe hepatic" without a noun), do not split — return Rule 0.
-
-Use the source_sentence field to resolve ambiguous modifier scope.
-
-Output format:
-{ "items": [{"ci_text": "<atomic span>", "split_applied": "<RULE_N or RULE_0>", "original_span": "<original input span>"}}<<END_JSON>>
-The JSON must end with the exact token:<<END_JSON>>
-"""
+# Prompt loaded from agents/decompose_agent.md at first call (see _load_decompose_agent below).
+DECOMPOSE_SYSTEM_PROMPT = ""  # nulled — content moved to agents/decompose_agent.md
 DECOMPOSE_USER_PROMPT = """
 Here is a contraindication span extracted from the text.
 contraindication span: {ci_text}
-Please apply the decomposition rules as specified. 
+Please apply the decomposition rules as specified.
 """
+
+# ---------------------------------------------
+# Markdown prompt loaders — extraction and decomposition
+# Follow the same lazy-cache pattern as _load_focus_selector (line ~748).
+# ---------------------------------------------
+
+_EXTRACT_AGENT_CACHE: str = ""
+
+
+def _load_extract_agent() -> str:
+    global _EXTRACT_AGENT_CACHE
+    if not _EXTRACT_AGENT_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "extract_agent.md"
+        if p.exists():
+            _EXTRACT_AGENT_CACHE = p.read_text(encoding="utf-8")
+    return _EXTRACT_AGENT_CACHE
+
+
+_DECOMPOSE_AGENT_CACHE: str = ""
+
+
+def _load_decompose_agent() -> str:
+    global _DECOMPOSE_AGENT_CACHE
+    if not _DECOMPOSE_AGENT_CACHE:
+        p = Path(__file__).parent.parent.parent / "agents" / "decompose_agent.md"
+        if p.exists():
+            _DECOMPOSE_AGENT_CACHE = p.read_text(encoding="utf-8")
+    return _DECOMPOSE_AGENT_CACHE
+
 
 # ---------------------------------------------
 # Prompt 02: MAPPING VERIFICATION
@@ -584,6 +541,21 @@ def parse_contra_extraction_output(text: str) -> List[Dict[str, Any]]:
     return normalized_items
 
 
+def _build_ingredient_block(ingredients: Optional[Dict[str, List[str]]]) -> str:
+    """Return an 'Available Ingredients:' context line for injection into the extraction prompt.
+
+    Returns an empty string when ingredients is None or both lists are empty so that callers
+    can safely substitute it into any template with ``{ingredient_block}``.
+    """
+    if not ingredients:
+        return ""
+    active = ingredients.get("active", [])
+    inactive = ingredients.get("inactive", [])
+    if not active and not inactive:
+        return ""
+    return f'Available Ingredients: {json.dumps({"active": active, "inactive": inactive})}'
+
+
 def extract_contraindication_items(
     chat_fn: Any,
     text: str,
@@ -594,8 +566,15 @@ def extract_contraindication_items(
     retry_token_increment: int = 256,
     system_prompt: str = CONTRA_EXTRACT_SYSTEM_PROMPT,
     user_prompt_template: str = CONTRA_EXTRACT_USER_PROMPT,
+    ingredients: Optional[Dict[str, List[str]]] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
-    messages = build_message(system_prompt, user_prompt_template.format(text=text))
+    ingredient_block = _build_ingredient_block(ingredients)
+    try:
+        user_prompt = user_prompt_template.format(text=text, ingredient_block=ingredient_block)
+    except KeyError:
+        # Template does not have {ingredient_block} — format without it
+        user_prompt = user_prompt_template.format(text=text)
+    messages = build_message(system_prompt, user_prompt)
 
     last_raw = ""
     attempts = max(1, retries + 1)
@@ -621,8 +600,10 @@ def decompose_contraindication_item(
     stop: Optional[List[str]] = None,
     retries: int = 1,
     retry_token_increment: int = 256,
+    system_prompt: str = "",
 ) -> Tuple[List[Dict[str, Any]], str]:
-    messages = build_message(DECOMPOSE_SYSTEM_PROMPT, build_decompose_user_prompt(item))
+    effective_system = system_prompt or DECOMPOSE_SYSTEM_PROMPT or _load_decompose_agent()
+    messages = build_message(effective_system, build_decompose_user_prompt(item))
     last_raw = ""
     attempts = max(1, retries + 1)
     for attempt in range(attempts):

@@ -51,7 +51,7 @@ from src.evaluation.evaluator import (
     write_csv_rows,
     write_jsonl,
 )
-from src.extraction.section_parser import CONTRA_Loinc, extract_section
+from src.extraction.section_parser import CONTRA_Loinc, extract_ingredients, extract_section
 from src.retrieval.hybrid_mapper import (
     DEFAULT_ITEM_TERM_KEYS,
     get_cached_mapper_resources,
@@ -62,14 +62,15 @@ from src.llm.prompts import (
     CATEGORIZE_SLOTS_USER_PROMPT,
     CONTRA_EXTRACT_SYSTEM_PROMPT,
     CONTRA_EXTRACT_USER_PROMPT,
-    DECOMPOSE_SYSTEM_PROMPT,
     DECOMPOSE_USER_PROMPT,
     DIRECT_VERIFY_SYSTEM_PROMPT,
     DIRECT_VERIFY_SYSTEM_PROMPT_ORIGINAL,
     ROUTE_OR_FILL_SYSTEM_PROMPT,
-    SIMPLE_EXTRACT_SYSTEM_PROMPT,
     SIMPLE_EXTRACT_USER_PROMPT,
+    _build_ingredient_block,
+    _load_decompose_agent,
     _load_direct_match_agent,
+    _load_extract_agent,
     _load_focus_selector,
     _load_postcord_agent,
     _load_snomed_conventions,
@@ -542,6 +543,7 @@ class ContraState(TypedDict, total=False):
     product_name: Optional[str]
     contra_section_found: bool
     contra_section_text: str
+    ingredients: Dict[str, List[str]]   # {"active": [...], "inactive": [...]} from LOINC 48780-1
     extracted_items: List[Dict[str, Any]]
     current_index: int
     current_item: Dict[str, Any]
@@ -1918,32 +1920,45 @@ class ContraLangGraphAgent:
                 "contra_section_text": spl_record.get("contra_section_text", ""),
             }
 
+        def resolve_ingredients_node(state: ContraState) -> ContraState:
+            spl_set_id = state.get("spl_set_id") or ""
+            ingr = extract_ingredients(spl_set_id) if spl_set_id else {"active": [], "inactive": []}
+            return {**state, "ingredients": ingr}
+
         def route_after_resolve(state: ContraState) -> str:
             if state.get("error"):
                 return "finalize"
-            return "extract_items"
+            return "resolve_ingredients"
 
         def extract_items_node(state: ContraState) -> ContraState:
             spl_context = dict(state["spl_record"])
             spl_context["contra_section_text"] = state.get("contra_section_text", "")
             section_text = spl_context.get("contra_section_text", "")
+            ingredients = state.get("ingredients") or {}
             extraction_started = time.perf_counter()
+            active_system = _load_extract_agent() or CONTRA_EXTRACT_SYSTEM_PROMPT
+            active_user_tmpl = SIMPLE_EXTRACT_USER_PROMPT or CONTRA_EXTRACT_USER_PROMPT
             items, raw = extract_contraindication_items(
                 self.llm.chat,
                 section_text,
                 max_tokens=self.cfg.extraction_max_tokens,
-                stop=None,
+                stop=self.cfg.stop,
                 retries=self.cfg.retries,
-                system_prompt=SIMPLE_EXTRACT_SYSTEM_PROMPT or CONTRA_EXTRACT_SYSTEM_PROMPT,
-                user_prompt_template=SIMPLE_EXTRACT_USER_PROMPT or CONTRA_EXTRACT_USER_PROMPT,
+                system_prompt=active_system,
+                user_prompt_template=active_user_tmpl,
+                ingredients=ingredients,
             )
-            active_system = SIMPLE_EXTRACT_SYSTEM_PROMPT or CONTRA_EXTRACT_SYSTEM_PROMPT
-            active_user_tmpl = SIMPLE_EXTRACT_USER_PROMPT or CONTRA_EXTRACT_USER_PROMPT
             parsed_payload: Optional[Dict[str, Any]] = {"items": items} if items else None
+            # Build the same formatted prompt used for the LLM call so the audit log is accurate
+            ingredient_block = _build_ingredient_block(ingredients)
+            try:
+                user_logged = active_user_tmpl.format(text=section_text, ingredient_block=ingredient_block)
+            except KeyError:
+                user_logged = active_user_tmpl.format(text=section_text)
             self._log_llm_call(
                 call_name="extract_contraindications",
                 system=active_system,
-                user=active_user_tmpl.format(text=section_text),
+                user=user_logged,
                 max_tokens=self.cfg.extraction_max_tokens,
                 effective_max_tokens=self.cfg.extraction_max_tokens,
                 raw=raw,
@@ -1967,18 +1982,29 @@ class ContraLangGraphAgent:
             if not items:
                 return state
             decomposed_all: List[Dict[str, Any]] = []
+            decompose_system = _load_decompose_agent()
             for item in items:
                 decompose_started = time.perf_counter()
                 results, raw = decompose_contraindication_item(
                     self.llm.chat,
                     item,
                     max_tokens=self.cfg.decompose_max_tokens,
-                    stop=None,
+                    stop=self.cfg.stop,
                     retries=self.cfg.retries,
+                    system_prompt=decompose_system,
                 )
+                # Deduplicate by ci_text (LLM may emit the same item twice after normalization)
+                seen_ci: set = set()
+                unique: List[Dict[str, Any]] = []
+                for r in results:
+                    key = r.get("ci_text", "").strip().lower()
+                    if key and key not in seen_ci:
+                        seen_ci.add(key)
+                        unique.append(r)
+                results = unique if unique else results
                 self._log_llm_call(
                     call_name="decompose_coordination",
-                    system=DECOMPOSE_SYSTEM_PROMPT,
+                    system=decompose_system,
                     user=build_decompose_user_prompt(item),
                     max_tokens=self.cfg.decompose_max_tokens,
                     effective_max_tokens=self.cfg.decompose_max_tokens,
@@ -2051,6 +2077,7 @@ class ContraLangGraphAgent:
 
         graph.add_node("bootstrap", instrument_spl_node("bootstrap", bootstrap_node))
         graph.add_node("resolve_contra_section", instrument_spl_node("resolve_contra_section", resolve_contra_section_node))
+        graph.add_node("resolve_ingredients", instrument_spl_node("resolve_ingredients", resolve_ingredients_node))
         graph.add_node("extract_items", instrument_spl_node("extract_items", extract_items_node))
         graph.add_node("decompose_coordinations", instrument_spl_node("decompose_coordinations", decompose_coordinations_node))
         graph.add_node("prepare_item", instrument_spl_node("prepare_item", prepare_item_node))
@@ -2067,8 +2094,9 @@ class ContraLangGraphAgent:
         graph.add_conditional_edges(
             "resolve_contra_section",
             route_after_resolve,
-            {"extract_items": "extract_items", "finalize": "finalize"},
+            {"resolve_ingredients": "resolve_ingredients", "finalize": "finalize"},
         )
+        graph.add_edge("resolve_ingredients", "extract_items")
         graph.add_edge("extract_items", "decompose_coordinations")
         graph.add_conditional_edges(
             "decompose_coordinations",

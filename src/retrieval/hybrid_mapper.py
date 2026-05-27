@@ -520,9 +520,10 @@ def search_snomed_concepts(
     """
     if not query.strip():
         return []
+    normalized_query = query.replace("-", " ")
     fetch_k = k * 5 if hierarchy_filter else k
     hits = search_query(
-        query_text=query,
+        query_text=normalized_query,
         model=resources.st_model,
         faiss_index=resources.faiss_index,
         concept_meta_df=resources.concept_meta_df,

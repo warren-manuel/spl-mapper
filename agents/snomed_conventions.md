@@ -1,5 +1,5 @@
 # SNOMED CT Conventions — Semantic Tags Reference
-*Generated from SNOMED CT US Edition 20250901 on 2026-05-19*
+*Generated from SNOMED CT US Edition 20250901 on 2026-05-26*
 
 ## Purpose
 Reference for Agent 1 (SNOMED Concept Navigator) semantic categorization of contraindication components. Generated from SNOMED CT RF2 US Edition 20250901.
@@ -251,6 +251,79 @@ Match linguistic cues to hierarchy descriptions below. Use `graph_client` tool o
 | 129980001 | (S)-stylopine synthase | substance |
 | 130239002 | (S)-tetrahydroprotoberberine N-methyltransferase | substance |
 | 28142007 | (S,S)-Butanediol dehydrogenase | substance |
+
+---
+
+### Pharmaceutical/Biological Product (373873005)
+
+**Contraindication role:** 
+
+**Valid as slot:** none
+
+**Linguistic cues:**
+
+**Semantic tags:**
+| Semantic Tag | Concept Count |
+|---|---|
+| medicinal product | 8571 |
+| clinical drug | 8355 |
+| medicinal product form | 7272 |
+| product | 1520 |
+| physical object | 1 |
+
+**Example concepts (up to 50, A–Z):**
+| SCTID | Preferred Term | Semantic Tag |
+|---|---|---|
+| 412023004 | Absorbable collagen sponge bone graft product | product |
+| 411898004 | Acacia longifolia specific diagnostic allergen extract | product |
+| 411614004 | Acacia species diagnostic allergen extract | product |
+| 411842004 | Acarus siro diagnostic allergen extract | product |
+| 411899007 | Acer negundo specific diagnostic allergen extract | product |
+| 358355001 | Acetate free continuous hemodialysis solution | product |
+| 358357009 | Acetate free hemofiltration solution | product |
+| 358250008 | Acetate hemodialysis dry concentrate | product |
+| 358246001 | Acetate hemodialysis liquid concentrate | product |
+| 358244003 | Acid hemodialysis liquid concentrate | product |
+| 358247005 | Acidic bicarbonate hemodialysis dry concentrate | product |
+| 411819006 | Acremonium chrysogenum diagnostic allergen extract | product |
+| 411148002 | Acrylate and methacrylate patch test series - artificial nail | product |
+| 411150005 | Acrylate and methacrylate patch test series - printing | product |
+| 411615003 | Actinidia chinensis diagnostic allergen extract | product |
+| 328432000 | Adrenoleukodystrophy food | product |
+| 443041000124101 | Adult anti-inflammatory critical care specialty formula | product |
+| 442901000124106 | Adult clear liquid supplement | product |
+| 443031000124106 | Adult critical care formula | product |
+| 443051000124104 | Adult diabetic specialty formula | product |
+| 443101000124104 | Adult dialysis renal specialty formula | product |
+| 446161000124106 | Adult dialysis specialty formula | product |
+| 443071000124109 | Adult elemental GI intolerance critical care specialty formula | product |
+| 443081000124107 | Adult elemental anti-inflammatory GI intolerance critical care specialty formula | product |
+| 442911000124109 | Adult elemental formula | product |
+| 442651000124102 | Adult formula | product |
+| 443021000124108 | Adult hepatic specialty formula | product |
+| 443001000124103 | Adult high calorie high protein formula | product |
+| 442971000124100 | Adult high energy formula | product |
+| 442991000124104 | Adult high protein formula | product |
+| 443011000124100 | Adult high protein high fiber formula | product |
+| 442981000124102 | Adult hydrolyzed protein formula | product |
+| 443061000124102 | Adult hydrolyzed protein metabolic stress critical care specialty formula | product |
+| 442961000124107 | Adult low carbohydrate formula | product |
+| 443091000124105 | Adult non-dialysis renal specialty formula | product |
+| 442951000124105 | Adult pulmonary specialty formula | product |
+| 442941000124108 | Adult renal specialty formula | product |
+| 442931000124103 | Adult soy protein isolate formula | product |
+| 442921000124101 | Adult standard formula | product |
+| 2031000221103 | Adult vaccine product containing only Clostridium tetani and Corynebacterium diphtheriae toxoids | medicinal product |
+| 865997008 | Adult vaccine product containing only Hepatitis A virus antigen | medicinal product |
+| 2051000221107 | Adult vaccine product containing only acellular Bordetella pertussis and Clostridium tetani toxoid and Corynebacterium diphtheriae toxoid antigens | medicinal product |
+| 1287596002 | Adult vaccine product containing only severe acute respiratory syndrome coronavirus 2 encoding B lineage spike protein and BA.4/BA.5 lineage spike protein messenger ribonucleic acid | medicinal product |
+| 411799000 | Aedes communis diagnostic allergen extract | product |
+| 411900002 | Aesculus hippocastanum pollen specific diagnostic allergen extract | product |
+| 411616002 | Agaricus hortensis diagnostic allergen extract | product |
+| 411774001 | Agrostis stolonifera diagnostic allergen extract | product |
+| 411686007 | Alces species meat diagnostic allergen extract | product |
+| 709079002 | Allergen extract | product |
+| 346313005 | Allergen extract vaccine | product |
 
 ---
 

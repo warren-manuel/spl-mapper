@@ -45,12 +45,14 @@ TOP_LEVEL_HIERARCHIES: Dict[str, str] = {
 
 CONTRAINDICATION_RELEVANT: Set[str] = {
     "404684003", "71388002", "105590001",
+    "373873005",  # Pharmaceutical/Biological Product
     "123037004", "362981000", "363787002", "410607006",
     "246061005",
 }
 
 HIERARCHY_PRIORITY: List[str] = [
     "404684003", "71388002", "105590001",
+    "373873005",  # Pharmaceutical/Biological Product
     "123037004", "362981000", "363787002", "410607006",
     "246061005",
 ]
