@@ -81,6 +81,13 @@ class SnomedGraphClient:
 
         self._driver = GraphDatabase.driver(_uri, auth=(_user, _password))
 
+        # In-memory read caches — keyed by method arguments.
+        # All four methods are pure reads; results never change within a run.
+        self._cache_ancestors: Dict[Any, List] = {}
+        self._cache_logical_def: Dict[str, List] = {}
+        self._cache_attr_range: Dict[str, List] = {}
+        self._cache_domain_attrs: Dict[str, List] = {}
+
     def close(self) -> None:
         self._driver.close()
 
@@ -221,13 +228,16 @@ class SnomedGraphClient:
 
     def get_ancestors(self, sctid: str, max_depth: int = 5) -> List[ConceptMatch]:
         """Traverse IS_A edges upward up to max_depth hops."""
-        with self._driver.session(database=self._database) as session:
-            results = session.run(
-                f"MATCH (c:Concept {{sctid: $sctid}})-[:IS_A*1..{int(max_depth)}]->(a:Concept) "
-                f"RETURN DISTINCT {self._CONCEPT_RETURN.replace('c.', 'a.')}",
-                sctid=sctid,
-            )
-            return [self._concept_match(r, "exact") for r in results]
+        key = (sctid, max_depth)
+        if key not in self._cache_ancestors:
+            with self._driver.session(database=self._database) as session:
+                results = session.run(
+                    f"MATCH (c:Concept {{sctid: $sctid}})-[:IS_A*1..{int(max_depth)}]->(a:Concept) "
+                    f"RETURN DISTINCT {self._CONCEPT_RETURN.replace('c.', 'a.')}",
+                    sctid=sctid,
+                )
+                self._cache_ancestors[key] = [self._concept_match(r, "exact") for r in results]
+        return self._cache_ancestors[key]
 
     # ── 4. get_logical_definition ─────────────────────────────────────────────
 
@@ -236,52 +246,56 @@ class SnomedGraphClient:
         Return all HAS_ROLE edges from this concept (its SNOMED logical definition).
         Grouped by rel_group; group 0 = ungrouped attributes.
         """
-        with self._driver.session(database=self._database) as session:
-            rows = session.run(
-                "MATCH (c:Concept {sctid: $sctid})-[r:HAS_ROLE]->(d:Concept) "
-                "RETURN r.type_sctid AS type_sctid, r.type_fsn AS type_fsn, "
-                "       d.sctid AS dst_sctid, d.preferred_term AS dst_term, "
-                "       r.group AS rel_group "
-                "ORDER BY r.group, r.type_sctid",
-                sctid=sctid,
-            )
-            return [
-                RoleTriple(
-                    type_sctid=r["type_sctid"] or "",
-                    type_fsn=r["type_fsn"] or "",
-                    destination_sctid=r["dst_sctid"] or "",
-                    destination_preferred_term=r["dst_term"] or "",
-                    rel_group=r["rel_group"] or 0,
+        if sctid not in self._cache_logical_def:
+            with self._driver.session(database=self._database) as session:
+                rows = session.run(
+                    "MATCH (c:Concept {sctid: $sctid})-[r:HAS_ROLE]->(d:Concept) "
+                    "RETURN r.type_sctid AS type_sctid, r.type_fsn AS type_fsn, "
+                    "       d.sctid AS dst_sctid, d.preferred_term AS dst_term, "
+                    "       r.group AS rel_group "
+                    "ORDER BY r.group, r.type_sctid",
+                    sctid=sctid,
                 )
-                for r in rows
-            ]
+                self._cache_logical_def[sctid] = [
+                    RoleTriple(
+                        type_sctid=r["type_sctid"] or "",
+                        type_fsn=r["type_fsn"] or "",
+                        destination_sctid=r["dst_sctid"] or "",
+                        destination_preferred_term=r["dst_term"] or "",
+                        rel_group=r["rel_group"] or 0,
+                    )
+                    for r in rows
+                ]
+        return self._cache_logical_def[sctid]
 
     # ── 5. get_attribute_range ───────────────────────────────────────────────
 
     def get_attribute_range(self, attribute_sctid: str) -> List[MRCMRange]:
         """Return MRCM range constraints for a given attribute SCTID.
         When multiple rules exist, prefers content_type_id=723594008 (precoordinated)."""
-        with self._driver.session(database=self._database) as session:
-            rows = list(session.run(
-                "MATCH (r:MRCMRange {attribute_sctid: $attr}) "
-                "OPTIONAL MATCH (attr:Concept {sctid: $attr}) "
-                "RETURN r.range_constraint AS rc, r.content_type_id AS ct, "
-                "       attr.fsn AS fsn",
-                attr=attribute_sctid,
-            ))
-        # Prefer precoordinated rule (723594008) when multiple rows exist
-        if len(rows) > 1:
-            filtered = [r for r in rows if r["ct"] == "723594008"]
-            if filtered:
-                rows = filtered
-        return [
-            MRCMRange(
-                attribute_sctid=attribute_sctid,
-                attribute_fsn=r["fsn"] or attribute_sctid,
-                range_constraint=r["rc"] or "",
-            )
-            for r in rows
-        ]
+        if attribute_sctid not in self._cache_attr_range:
+            with self._driver.session(database=self._database) as session:
+                rows = list(session.run(
+                    "MATCH (r:MRCMRange {attribute_sctid: $attr}) "
+                    "OPTIONAL MATCH (attr:Concept {sctid: $attr}) "
+                    "RETURN r.range_constraint AS rc, r.content_type_id AS ct, "
+                    "       attr.fsn AS fsn",
+                    attr=attribute_sctid,
+                ))
+            # Prefer precoordinated rule (723594008) when multiple rows exist
+            if len(rows) > 1:
+                filtered = [r for r in rows if r["ct"] == "723594008"]
+                if filtered:
+                    rows = filtered
+            self._cache_attr_range[attribute_sctid] = [
+                MRCMRange(
+                    attribute_sctid=attribute_sctid,
+                    attribute_fsn=r["fsn"] or attribute_sctid,
+                    range_constraint=r["rc"] or "",
+                )
+                for r in rows
+            ]
+        return self._cache_attr_range[attribute_sctid]
 
     # ── 6. get_attribute_domain_rules ────────────────────────────────────────
 
@@ -316,25 +330,27 @@ class SnomedGraphClient:
         (or equal to) the focus concept. Returns list of dicts with
         attribute_sctid, preferred_term, and fsn.
         """
-        with self._driver.session(database=self._database) as session:
-            rows = session.run(
-                "MATCH (focus:Concept {sctid: $sctid})-[:IS_A*0..30]->(ancestor:Concept) "
-                "MATCH (d:MRCMAttributeDomain) WHERE d.domain_id = ancestor.sctid "
-                "OPTIONAL MATCH (attr:Concept {sctid: d.attribute_sctid}) "
-                "RETURN DISTINCT d.attribute_sctid AS attribute_sctid, attr.fsn AS fsn",
-                sctid=focus_sctid,
-            )
-            seen: set = set()
-            result: List[Dict[str, str]] = []
-            for r in rows:
-                attr = r["attribute_sctid"]
-                if attr and attr not in seen:
-                    seen.add(attr)
-                    result.append({
-                        "attribute_sctid": attr,
-                        "fsn": r["fsn"] or attr,
-                    })
-            return result
+        if focus_sctid not in self._cache_domain_attrs:
+            with self._driver.session(database=self._database) as session:
+                rows = session.run(
+                    "MATCH (focus:Concept {sctid: $sctid})-[:IS_A*0..30]->(ancestor:Concept) "
+                    "MATCH (d:MRCMAttributeDomain) WHERE d.domain_id = ancestor.sctid "
+                    "OPTIONAL MATCH (attr:Concept {sctid: d.attribute_sctid}) "
+                    "RETURN DISTINCT d.attribute_sctid AS attribute_sctid, attr.fsn AS fsn",
+                    sctid=focus_sctid,
+                )
+                seen: set = set()
+                result: List[Dict[str, str]] = []
+                for r in rows:
+                    attr = r["attribute_sctid"]
+                    if attr and attr not in seen:
+                        seen.add(attr)
+                        result.append({
+                            "attribute_sctid": attr,
+                            "fsn": r["fsn"] or attr,
+                        })
+            self._cache_domain_attrs[focus_sctid] = result
+        return self._cache_domain_attrs[focus_sctid]
 
     # ── 8. get_siblings ──────────────────────────────────────────────────────
 

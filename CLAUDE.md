@@ -6,13 +6,13 @@ LangGraph-based pipeline that extracts contraindications from SPL (Structured Pr
 
 ---
 
-## Current Architecture (as of 2026-05-21)
+## Current Architecture (as of 2026-05-27)
 
 ### Two Nested LangGraph Graphs
 
 **SPL-level graph** (one per SPL record):
 ```
-resolve_contra_section → extract_items → [loop] prepare_item → process_item → advance_item → finalize
+resolve_contra_section → resolve_ingredients → extract_items → [loop] prepare_item → process_item → advance_item → finalize
 ```
 
 **Item-level graph** (one per extracted contraindication):
@@ -40,8 +40,9 @@ All three ReAct agents are **self-contained**: they call `search_snomed` and ont
 
 | Node | Call | Pattern |
 |---|---|---|
-| `extract_items_node` | Extract discrete contraindication items from SPL section text | Single-shot |
-| `decompose_coordinations_node` | Linguistically split coordinated items (e.g. "A and B" → [A, B]) | Single-shot per item |
+| `resolve_ingredients_node` | Parse product ingredient names from SPL XML (LOINC `48780-1`); no LLM call | Deterministic XML parse |
+| `extract_items_node` | Extract discrete contraindication items from SPL section text; receives ingredient context block | Single-shot |
+| `decompose_coordinations_node` | Linguistically split coordinated items (e.g. "A and B" → [A, B]); RULE 5 expands ingredient-annotated spans | Single-shot per item |
 
 ### Retrieval Stack
 ```
@@ -139,6 +140,27 @@ Created `src/tools/snomed_mcp_server.py` (FastMCP server with 7 tools) and `src/
 - All three ToolNode flags set to `false` in `.env` pending proper Phase IX prompt rewrite + validation
 → Details: `plans/plan_VLLM.md` §Phase IX
 
+### Performance Fixes + Caching (2026-05-26/27)
+
+**ReAct loop stop token fix (`stop=None`):**
+- Root cause: all three ReAct loop `.chat()` calls passed `stop=self.cfg.stop` → `['<<END_JSON>>']`. Intermediate tool-call iterations never emit `<<END_JSON>>`, so the model exhausted the full `max_tokens` budget on every intermediate step before natural EOS.
+- Fix: all three ReAct loops changed to `stop=None`; single-shot calls (`extract`, `decompose`, `_call_llm_json`) keep `stop=self.cfg.stop`
+- **Impact:** `process_item` average latency reduced; wasteful generation on intermediate steps eliminated
+
+**Ingredient context injection into extraction:**
+- New `resolve_ingredients_node` (before `extract_items_node`): parses SPL XML (LOINC `48780-1`, `classCode` ACTIB/ACTIM=active, IACT=inactive) → `state["ingredients"] = {"active": [...], "inactive": [...]}`
+- New `agents/extract_agent.md`: system prompt with ingredient annotation rule — if "Available Ingredients" present and span references "any component"/"any ingredient"/product-generic text, append `. Ingredients/Components: <JSON>` to that ci_text only
+- `_build_ingredient_block()` helper in `src/llm/prompts.py` formats ingredient dict for injection; `extract_contraindication_items()` gains `ingredients=` kwarg
+- New `agents/decompose_agent.md`: RULE 5 — INGREDIENT LIST EXPANSION (STAGE 1, before RULE 0): strips `. Ingredients/Components: <JSON>` suffix, emits one item per ingredient, `split_applied = "RULE_5"`
+
+**Multi-level in-memory caching (within-run, `scripts/run_pipeline.py` + `src/snomed/graph_client.py`):**
+- **Layer 1 — Neo4j method cache** (`SnomedGraphClient`): `_cache_ancestors`, `_cache_logical_def`, `_cache_attr_range`, `_cache_domain_attrs` — avoids re-querying same SCTID across ReAct iterations (3–8 calls per item)
+- **Layer 2 — Decompose result cache** (`ContraLangGraphAgent._decompose_cache`): key = `ci_text.strip().lower()`; skips decompose LLM call on duplicate ci_text; ~9.4s per hit
+- **Layer 3 — Item result cache** (`ContraLangGraphAgent._item_result_cache`): key = `ci_text.strip().lower()`; skips full `item_graph.invoke()` on duplicate ci_text; provenance fields (`spl_set_id`, `item_index`) overwritten to current item; ~22.5s per hit; `log_event("item_cache_hit", ...)` emitted for observability
+- Caches are within-run only (Python process lifetime); no disk persistence
+- **Performance verification (5-SPL doubled to 10):** Run 1 (cold): 1579s; Run 2 (50% cache hits): 1397s (−11.5%); cached item avg 11.3s vs 22.5s uncached
+→ Details: `plans/plan_VLLM.md` §Post-Performance-Fixes-2026-05-27
+
 ### SNOMED Neo4j Knowledge Graph
 Built Neo4j graph from SNOMED RF2 source. Loaded Concept, IS_A, HAS_ROLE, MRCMAttributeDomain, MRCMAttributeRange nodes/edges.
 → Details: `plans/SNOMED_BUILD_PLAN.md`, `plans/SNOMED_BUILD_LOG.md`
@@ -224,6 +246,8 @@ Rename `results → contraindications` at SPL level. Per-item: drop `SPL_SET_ID`
 | 5 | Implicit slot inference in prompts (severity/course inferred from text) | ⬜ Planned |
 | 6 | Parallelize item processing (LangGraph `Send` API) | ⬜ Planned |
 | 7 | Prompt hardening for SNOMED accuracy | ⚠️ Partial — ancestor paths ✅, FSN display ⬜, negative anchoring ⬜ |
+| 8 | Multi-level in-memory caching (Neo4j, decompose, item result) | ✅ Implemented (2026-05-27) |
+| 9 | Ingredient context injection + RULE 5 expansion | ✅ Implemented (2026-05-27) |
 
 ---
 
@@ -247,7 +271,7 @@ Rename `results → contraindications` at SPL level. Per-item: drop `SPL_SET_ID`
 - **`prompts.py`** — System/user prompt builders and LLM call wrappers for all nodes: `extract_contraindication_items`, `categorize_item_slots`, `build_direct_match_agent_user_prompt`, `build_focus_selector_user_prompt`, `build_mrcm_mapper_react_user_prompt`
 
 ### `src/snomed/`
-- **`graph_client.py`** — Neo4j client: `lookup_concept`, `get_logical_definition`, `get_ancestors`, `get_siblings`, `get_domain_attributes`, `get_attribute_range`
+- **`graph_client.py`** — Neo4j client: `lookup_concept`, `get_logical_definition`, `get_ancestors`, `get_siblings`, `get_domain_attributes`, `get_attribute_range`; instance-level read caches for all 4 traversal methods (`_cache_ancestors`, `_cache_logical_def`, `_cache_attr_range`, `_cache_domain_attrs`)
 - **`snomed_utils.py`** — RF2 flatfile loading, ECL evaluation, `get_ancestors_with_depth`, `get_range_constraints_for_attribute`, `validate_postcoord_with_mrcm`
 
 ### `src/evaluation/`
@@ -258,6 +282,8 @@ Rename `results → contraindications` at SPL level. Per-item: drop `SPL_SET_ID`
 - `focus_selector.md` — Focus selector ReAct agent (identify focus component → search → verify → resolve parent)
 - `postcord_agent.md` — MRCM attribute mapper ReAct agent (domain attrs → range → search per component → refinements[])
 - `snomed_conventions.md` — SNOMED hierarchy taxonomy for `categorize_slots` (Agent 2)
+- `extract_agent.md` — Extraction system prompt with ingredient annotation rule (append `. Ingredients/Components: <JSON>` to product-generic spans)
+- `decompose_agent.md` — Decompose system prompt with RULE 5 — INGREDIENT LIST EXPANSION (strips ingredient suffix, emits one item per ingredient)
 
 ---
 

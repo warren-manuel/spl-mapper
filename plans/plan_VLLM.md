@@ -557,3 +557,104 @@ Phase VIII ──→ Phase IX (optional — ToolNode can call direct Python or M
 
 Phase VIII is not a hard dependency of Phase IX — ToolNode can call the Python functions
 directly. MCP is the transport for external orchestrators, not for internal LangGraph use.
+
+---
+
+## Post-Performance Fixes (2026-05-26/27 — all implemented ✅)
+
+### Fix 11 — ReAct loop stop token (`stop=None`)
+
+**Files:** `scripts/run_pipeline.py`
+
+**Root cause:** All three ReAct loop `.chat()` calls passed `stop=self.cfg.stop` → `['<<END_JSON>>']`.
+Intermediate tool-call iterations (e.g. `{"tool": "search_snomed", "args": {...}}`) never emit
+`<<END_JSON>>`, so the model was forced to generate until it exhausted the full `max_tokens` budget
+(384–512 tokens) on every intermediate step before natural EOS — wasting time on every tool call.
+
+**Fix:** Changed `stop=self.cfg.stop` → `stop=None` in the three ReAct main `.chat()` calls:
+- `direct_match_node` loop
+- `focus_selector_node` loop
+- `mrcm_attribute_mapper_node` loop
+
+Single-shot LLM calls (`extract_contraindication_items`, `decompose_coordination_item`, `_call_llm_json`) keep `stop=self.cfg.stop` — they DO emit `<<END_JSON>>` at the end.
+
+**Impact:** `process_item` average latency reduced; wasted token generation on every intermediate tool-call step eliminated.
+
+---
+
+### Fix 12 — Ingredient context injection into extraction
+
+**Files:** `scripts/run_pipeline.py`, `src/llm/prompts.py`, `agents/extract_agent.md` (new), `agents/decompose_agent.md` (new)
+
+**New node: `resolve_ingredients_node`** (inserted before `extract_items_node` in SPL-level graph):
+- Parses SPL XML from `state["raw_record"]`
+- Reads LOINC section `48780-1` (product data elements)
+- `classCode` ACTIB / ACTIM → active ingredients; IACT → inactive ingredients
+- Writes `state["ingredients"] = {"active": [...], "inactive": [...]}` (name strings only)
+- No LLM call — deterministic XML parse
+
+**Extraction enhancement:**
+- `_build_ingredient_block(ingredients)` helper in `src/llm/prompts.py` → `"Available Ingredients: {...}"`
+- `extract_contraindication_items()` gains `ingredients=` kwarg; injects block into user prompt via `{ingredient_block}` placeholder with `try/except KeyError` fallback for templates that lack the placeholder
+- `agents/extract_agent.md`: new system prompt with INGREDIENT ANNOTATION rule:
+  - If "Available Ingredients" is present AND span contains "any component"/"any ingredient"/"any part" / product-generic reference → append `. Ingredients/Components: <JSON>` to that ci_text
+  - Do NOT annotate spans that already name a specific substance
+
+**Decompose RULE 5 — INGREDIENT LIST EXPANSION** (`agents/decompose_agent.md`):
+- New file replaces the old inline `DECOMPOSE_SYSTEM_PROMPT` constant
+- RULE 5 (in STAGE 1, checked before RULE 0): if ci_text ends with `. Ingredients/Components: <JSON>` suffix:
+  1. Strip suffix → `base_span`
+  2. Parse JSON for `active[]` and `inactive[]` lists
+  3. Emit one item per ingredient: ci_text = `base_span` with "any component [of PRODUCT]" replaced by ingredient name
+  4. `split_applied = "RULE_5"`
+- Output schema drops `original_span` field (user-simplified)
+
+---
+
+### Multi-Level In-Memory Caching
+
+**Files:** `scripts/run_pipeline.py`, `src/snomed/graph_client.py`
+
+Three cache layers, ordered by ROI:
+
+**Layer 1 — Neo4j method caching** (`src/snomed/graph_client.py`):
+
+Added four instance-level dict caches to `SnomedGraphClient.__init__`:
+```python
+self._cache_ancestors: Dict[Any, List] = {}
+self._cache_logical_def: Dict[str, List] = {}
+self._cache_attr_range: Dict[str, List] = {}
+self._cache_domain_attrs: Dict[str, List] = {}
+```
+Each public method wraps its query body: check cache first, execute query on miss, store result. Keys:
+- `get_ancestors(sctid, max_depth)` → key `(sctid, max_depth)`
+- `get_logical_definition(sctid)` → key `sctid`
+- `get_attribute_range(attribute_sctid)` → key `attribute_sctid`
+- `get_domain_attributes(focus_sctid)` → key `focus_sctid`
+
+Same SCTID (e.g. `39579001` "Allergic reaction") was queried 3–8 times per item across ReAct iterations; cache eliminates all but the first.
+
+**Layer 2 — Decompose result cache** (`ContraLangGraphAgent._decompose_cache: Dict[str, List[Dict]]`):
+- Key: `ci_text.strip().lower()`
+- Cache checked before LLM call in `decompose_coordinations_node`; result stored after successful call
+- `log_event("decompose_cache_hit", ...)` emitted on hit
+- `continue` on hit — skips the LLM call entirely
+- ~9.4s saved per hit
+
+**Layer 3 — Item result cache** (`ContraLangGraphAgent._item_result_cache: Dict[str, Dict]`):
+- Key: `ci_text.strip().lower()`
+- Cache checked before `item_graph.invoke()` in `process_item_node`
+- On hit: copy cached result, overwrite `spl_set_id` and `item_index` to current item's values (provenance correction — never leak source SPL's IDs)
+- `log_event("item_cache_hit", ci_text=..., spl_set_id=...)` emitted on hit
+- ~22.5s saved per hit (full item graph execution skipped)
+- Caches live for Python process lifetime only; cleared on restart; no disk persistence
+
+**Cache scope:** All caches are on the `ContraLangGraphAgent` instance, which is **shared across all SPLs in a single run**. Within-run deduplication is immediate. ~18% of ci_text values repeat across SPLs in a typical batch run.
+
+**Performance verification:**
+- Test set: `results/VO_SPL_5.txt` (5 SPLs) doubled to `results/VO_SPL_5_doubled.txt` (10 SPLs, same 5 repeated) to force 100% cache hits in second batch
+- Run 1 (cold, `results/20260526_run1/`): 1579s wall-clock
+- Run 2 (50% cache hits, `results/20260526_run2/`): 1397s wall-clock (−11.5%)
+- Average `process_item` for cached items in run 2: ~11.3s vs ~22.5s uncached
+- Commit: `aa12ae1` — "feat: ingredient extraction, decompose/extract agent prompts, dedup, stop token fixes"
+

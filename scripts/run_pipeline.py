@@ -790,6 +790,10 @@ class ContraLangGraphAgent:
         self.observer = observer
         self.extraction_cache = extraction_cache  # None = disabled; {} = enabled but empty
         self.graph_client = graph_client          # Optional SnomedGraphClient for Phase 2 lookups
+        # Within-run result caches — keyed by ci_text.strip().lower()
+        # Avoids re-processing identical items that appear across different SPLs in the same run.
+        self._decompose_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._item_result_cache: Dict[str, Dict[str, Any]] = {}
         # Phase IX: LangChain tools for ToolNode conversion (None when all flags off or backend lacks get_langchain_llm)
         self._agent_tools: Optional[list] = None
         if (
@@ -1984,6 +1988,13 @@ class ContraLangGraphAgent:
             decomposed_all: List[Dict[str, Any]] = []
             decompose_system = _load_decompose_agent()
             for item in items:
+                ci_key = item.get("ci_text", "").strip().lower()
+                # Cache hit: same span already decomposed earlier in this run
+                if ci_key and ci_key in self._decompose_cache:
+                    if self.observer:
+                        self.observer.log_event("decompose_cache_hit", ci_text=item.get("ci_text", ""))
+                    decomposed_all.extend(self._decompose_cache[ci_key])
+                    continue
                 decompose_started = time.perf_counter()
                 results, raw = decompose_contraindication_item(
                     self.llm.chat,
@@ -2012,6 +2023,8 @@ class ContraLangGraphAgent:
                     parsed={"items": results} if results else None,
                     duration_s=time.perf_counter() - decompose_started,
                 )
+                if ci_key:
+                    self._decompose_cache[ci_key] = results
                 decomposed_all.extend(results)
             indexed = [{**it, "item_index": i} for i, it in enumerate(decomposed_all)]
             return {**state, "extracted_items": indexed}
@@ -2029,13 +2042,35 @@ class ContraLangGraphAgent:
             return {**state, "current_item": items[idx]}
 
         def process_item_node(state: ContraState) -> ContraState:
+            current_item = state.get("current_item") or {}
+            ci_key = current_item.get("ci_text", "").strip().lower()
+
+            # Cache hit: same ci_text already fully processed earlier in this run
+            if ci_key and ci_key in self._item_result_cache:
+                cached = dict(self._item_result_cache[ci_key])
+                # Overwrite provenance fields so they reflect the current SPL/item
+                cached["spl_set_id"] = state.get("spl_set_id", cached.get("spl_set_id"))
+                cached["item_index"] = current_item.get("item_index", cached.get("item_index"))
+                if self.observer:
+                    self.observer.log_event(
+                        "item_cache_hit",
+                        ci_text=current_item.get("ci_text", ""),
+                        spl_set_id=state.get("spl_set_id"),
+                    )
+                item_results = list(state.get("item_results", []))
+                item_results.append(cached)
+                return {**state, "item_results": item_results}
+
             item_state: ItemState = {
                 "spl_set_id": state["spl_set_id"],
-                "item": state["current_item"],
+                "item": current_item,
             }
             result = self.item_graph.invoke(item_state)
+            item_result = result["item_result"]
+            if ci_key:
+                self._item_result_cache[ci_key] = item_result
             item_results = list(state.get("item_results", []))
-            item_results.append(result["item_result"])
+            item_results.append(item_result)
             return {**state, "item_results": item_results}
 
         def advance_item_node(state: ContraState) -> ContraState:
