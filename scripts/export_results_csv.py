@@ -202,6 +202,18 @@ def convert(
             for item in spl.get("results") or []:
                 rows.append(_item_to_row(item, spl, fsn_lookup))
 
+    # Blank SPL_SET_ID / product_name / contraindication_text on repeated rows so the
+    # shared header fields appear only once per SPL group (display formatting only).
+    _BLANK_FIELDS = ("SPL_SET_ID", "product_name", "contraindication_text")
+    last_key: tuple = ()
+    for row in rows:
+        key = (row["SPL_SET_ID"], row["product_name"], row["contraindication_text"])
+        if key == last_key:
+            for f in _BLANK_FIELDS:
+                row[f] = ""
+        else:
+            last_key = key
+
     write_csv_rows(output_path, rows, FIELDNAMES)
     return len(rows)
 
