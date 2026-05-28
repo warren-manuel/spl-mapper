@@ -2049,7 +2049,7 @@ class ContraLangGraphAgent:
             if ci_key and ci_key in self._item_result_cache:
                 cached = dict(self._item_result_cache[ci_key])
                 # Overwrite provenance fields so they reflect the current SPL/item
-                cached["spl_set_id"] = state.get("spl_set_id", cached.get("spl_set_id"))
+                cached["SPL_SET_ID"] = state.get("spl_set_id", cached.get("SPL_SET_ID"))
                 cached["item_index"] = current_item.get("item_index", cached.get("item_index"))
                 if self.observer:
                     self.observer.log_event(

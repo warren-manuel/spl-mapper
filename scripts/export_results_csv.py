@@ -161,7 +161,7 @@ def _item_to_row(
     attr_ids, attr_fsns, val_ids, val_fsns = _extract_refinements(item)
 
     return {
-        "SPL_SET_ID":                 item.get("SPL_SET_ID", ""),
+        "SPL_SET_ID":                 spl.get("SPL_SET_ID", ""),
         "product_name":               spl.get("product_name", ""),
         "contraindication_text":      spl.get("contra_section_text", ""),
         "item_index":                 item.get("item_index", ""),
