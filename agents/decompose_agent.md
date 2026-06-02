@@ -46,21 +46,39 @@ Example: "contraindicated in pregnant women and nursing mothers"
 RULE 5 — INGREDIENT LIST EXPANSION
 Pattern: ci_text ends with ". Components: <pipe-delimited list>"
 Action:
-  1. Strip the ". Components: <list>" suffix to obtain the base_span.
-  2. Split the suffix on " | " to get ingredient names.
-  3. For each ingredient name, emit one item:
+  1. Strip the ". Components: <list>" suffix to obtain base_span.
+  2. Build the combined ingredient list from TWO sources (deduplicate case-insensitively):
+     a. XML list: split the suffix value on " | " to get XML-sourced names.
+     b. Inline list: scan base_span for the pattern
+        "including SUBSTANCE[, SUBSTANCE2[, and SUBSTANCE3]]" where the list ends
+        at a sentence boundary, "[" reference, or "(" parenthetical.
+        Extract each named substance from this pattern.
+     Combined list = XML list first, then any inline-only substances appended.
+  3. For each ingredient in the combined list, emit one item:
      - ci_text = base_span with "any component [of PRODUCT]" or "any ingredient [of PRODUCT]"
        replaced by the ingredient name (keep all surrounding clinical text intact).
      - split_applied = "RULE_5"
   4. Apply DEDUPLICATION GUARD across the emitted items.
-  5. If the ingredient list is empty, fall through to RULE 0 on the base_span.
+  5. If the combined list is empty, fall through to RULE 0 on the base_span.
 
-Example:
-  Input ci_text: "anaphylaxis after any component of DAPTACEL. Components: BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED) | ALUMINUM PHOSPHATE | FORMALDEHYDE"
+Example A (XML list only):
+  Input: "anaphylaxis after any component of DAPTACEL. Components: BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED) | ALUMINUM PHOSPHATE | FORMALDEHYDE"
   base_span: "anaphylaxis after any component of DAPTACEL"
+  XML list: ["BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED)", "ALUMINUM PHOSPHATE", "FORMALDEHYDE"]
+  Inline:   []
   → ci_text: "anaphylaxis after BORDETELLA PERTUSSIS TOXOID ANTIGEN (INACTIVATED)"  (RULE_5)
   → ci_text: "anaphylaxis after ALUMINUM PHOSPHATE"                                  (RULE_5)
   → ci_text: "anaphylaxis after FORMALDEHYDE"                                        (RULE_5)
+
+Example B (XML list + inline):
+  Input: "anaphylaxis after any component of RECOMBIVAX HB, including yeast. Components: HEPATITIS B VIRUS SUBTYPE ADW HBSAG SURFACE PROTEIN ANTIGEN | ALUMINUM HYDROXYPHOSPHATE SULFATE"
+  base_span: "anaphylaxis after any component of RECOMBIVAX HB, including yeast"
+  XML list: ["HEPATITIS B VIRUS SUBTYPE ADW HBSAG SURFACE PROTEIN ANTIGEN", "ALUMINUM HYDROXYPHOSPHATE SULFATE"]
+  Inline:   ["yeast"]
+  Combined: ["HEPATITIS B VIRUS...", "ALUMINUM HYDROXYPHOSPHATE SULFATE", "yeast"]
+  → ci_text: "anaphylaxis after HEPATITIS B VIRUS SUBTYPE ADW HBSAG SURFACE PROTEIN ANTIGEN"  (RULE_5)
+  → ci_text: "anaphylaxis after ALUMINUM HYDROXYPHOSPHATE SULFATE"                             (RULE_5)
+  → ci_text: "anaphylaxis after yeast"                                                         (RULE_5)
 
 RULE 0 — NO SPLIT
 If none of the above patterns apply, return the span unchanged as a

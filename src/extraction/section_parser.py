@@ -159,38 +159,36 @@ def section_text(section_el: etree._Element) -> str:
 
 def extract_ingredient_names(root: etree._Element) -> dict:
     """
-    Extract active and inactive ingredient names from the SPL product data elements
-    section (LOINC 48780-1).
+    Extract all ingredient names from the SPL XML, regardless of classCode.
 
-    Active:   classCode in {"ACTIB", "ACTIM"}
-    Inactive: classCode == "IACT"
+    Captures every <ingredient> element (ACTIB, ACTIM, IACT, ADJV, BASE, …).
+    Deduplicates by UNII (the <ingredientSubstance><code code="…"> attribute);
+    falls back to uppercased name when no UNII is present. This handles SPLs
+    where the same ingredient appears once per product form (up to 5× repetition).
 
     Returns:
-        {"active": sorted list of names, "inactive": sorted list of names}
+        {"active": list of unique names in document order, "inactive": []}
     """
     ns = {"hl7": get_default_ns(root)}
-    actives: list[str] = []
-    inactives: list[str] = []
+    seen: set[str] = set()
+    names: list[str] = []
 
     for ingr in root.xpath(".//hl7:ingredient", namespaces=ns):
-        class_code = ingr.get("classCode", "").upper()
-        name_els = ingr.xpath(
-            ".//hl7:ingredientSubstance/hl7:name", namespaces=ns
-        )
+        name_els = ingr.xpath(".//hl7:ingredientSubstance/hl7:name", namespaces=ns)
         if not name_els:
             continue
         name = (name_els[0].text or "").strip()
         if not name:
             continue
-        if class_code in ("ACTIB", "ACTIM"):
-            actives.append(name)
-        elif class_code == "IACT":
-            inactives.append(name)
+        code_els = ingr.xpath(".//hl7:ingredientSubstance/hl7:code", namespaces=ns)
+        unii = code_els[0].get("code", "").strip() if code_els else ""
+        dedup_key = unii if unii else name.upper()
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+        names.append(name)
 
-    return {
-        "active": sorted(set(actives)),
-        "inactive": sorted(set(inactives)),
-    }
+    return {"active": names, "inactive": []}
 
 
 def extract_ingredients(setid: str) -> dict:
