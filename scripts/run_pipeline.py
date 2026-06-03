@@ -1017,6 +1017,10 @@ class ContraLangGraphAgent:
                     args.get("sctid", ""), limit=int(args.get("limit", 5))
                 )
                 return {"siblings": [r.__dict__ for r in results]}
+            if tool == "verify_concept_specificity":
+                return graph_client.verify_concept_specificity(
+                    args.get("sctid", ""), args.get("query_text", "")
+                )
             if tool == "get_domain_attributes":
                 results = graph_client.get_domain_attributes(args.get("focus_sctid", ""))
                 return {"attributes": results}

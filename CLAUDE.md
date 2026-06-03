@@ -231,6 +231,10 @@ Convert order: `direct_match_node` → `focus_selector_node` → `mrcm_attribute
 `src/tools/snomed_mcp_server.py`, `.mcp.json`, `fastmcp`, `langchain-openai` all in place. Next: confirm Claude Code can call `search_snomed` directly via `.mcp.json` stdio registration.
 → Full plan: `plans/plan_VLLM.md` §Phase VIII
 
+### Direct Match Specificity Correction ⬜ (planned, not yet implemented)
+New tool `verify_concept_specificity(sctid, query_text)` for `direct_match_node`. When a pre-coordinated candidate's label uses different clinical terminology than the query, the tool walks the logical definition's role values through their IS-A ancestors to detect specificity mismatches (e.g. "Allergic process" IS-A "Hypersensitivity process" — if query says "hypersensitivity", the match is too specific → reject). Zero hardcoding; causative agents auto-skip via word-overlap matching. Budget bumped 8→10.
+→ Full plan: `plans/plan_direct_match_specificity.md`
+
 ### Output Schema Restructure ⬜ (planned, not yet implemented)
 Rename `results → contraindications` at SPL level. Per-item: drop `SPL_SET_ID`, `post_decision`, `fills`; rename `selected_id/term → primary_concept_id/fsn`; surface `decision`, `confidence`, `refinements` from `postcoord_pattern`. Update evaluator CSV columns: add `product_name`, `status`, `decision`, `confidence`; remove `mapping_source`, `final_concept_id`, `postcoord_expression`.
 → Full plan: `plans/OUTPUT_SCHEMA_PLAN.md`

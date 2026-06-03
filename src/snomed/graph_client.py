@@ -368,7 +368,70 @@ class SnomedGraphClient:
             )
             return [self._concept_match(r, "sibling") for r in results]
 
-    # ── 8. check_concept_exists ──────────────────────────────────────────────
+    # ── 8. verify_concept_specificity ───────────────────────────────────────
+
+    def verify_concept_specificity(self, sctid: str, query_text: str) -> Dict[str, Any]:
+        """
+        Determine whether a matched concept's logical definition is more specific than
+        the query implies, by traversing each non-matching role value's IS-A ancestors.
+
+        Algorithm (zero hardcoding):
+          For every role in the logical definition, compute word overlap between the
+          role value's preferred term and the query text (case-insensitive, words > 3
+          chars). If overlap → consistent → skip. If no overlap → walk that value's
+          IS-A ancestors (depth 2). If any ancestor term overlaps the query → the role
+          value IS-A something the query describes → concept is too specific.
+
+        Returns:
+          {"verdict": "too_specific" | "compatible",
+           "details": [{"attribute", "concept_value",
+                        "ancestor_matching_query", "interpretation"}]}
+        """
+        import re
+
+        roles = self.get_logical_definition(sctid)
+        if not roles:
+            return {
+                "verdict": "compatible",
+                "details": [],
+                "note": "primitive concept — no logical definition to check",
+            }
+
+        query_words = {w for w in re.findall(r'\b\w+\b', query_text.lower()) if len(w) > 3}
+        details: List[Dict[str, Any]] = []
+
+        for role in roles:
+            value_term = (role.destination_preferred_term or "").lower()
+            value_words = {w for w in re.findall(r'\b\w+\b', value_term) if len(w) > 3}
+
+            if value_words & query_words:
+                continue  # role value consistent with query
+
+            ancestors = self.get_ancestors(role.destination_sctid, max_depth=2)
+            for ancestor in ancestors:
+                anc_words = {
+                    w for w in re.findall(r'\b\w+\b', (ancestor.preferred_term or "").lower())
+                    if len(w) > 3
+                }
+                if anc_words & query_words:
+                    details.append({
+                        "attribute": role.type_fsn,
+                        "concept_value": role.destination_preferred_term,
+                        "ancestor_matching_query": ancestor.preferred_term,
+                        "interpretation": (
+                            f"'{role.destination_preferred_term}' IS-A "
+                            f"'{ancestor.preferred_term}' — the query implies the broader "
+                            f"concept; this match is more specific than the query"
+                        ),
+                    })
+                    break
+
+        return {
+            "verdict": "too_specific" if details else "compatible",
+            "details": details,
+        }
+
+    # ── 9. check_concept_exists ──────────────────────────────────────────────
 
     def check_concept_exists(self, sctid: str) -> bool:
         with self._driver.session(database=self._database) as session:

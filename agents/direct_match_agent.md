@@ -70,6 +70,14 @@ the best candidate.
 same specificity. Minor wording variation is acceptable; semantic generalization or
 specialization is not.
 
+If the logical definition is non-empty, your **next tool call must be**
+`verify_concept_specificity(sctid, query_text)`. You may not output a final answer
+until you have called this tool and received its verdict.
+- verdict `"compatible"` → proceed to accept
+- verdict `"too_specific"` → return `direct_match: false` immediately. If the only
+  available pre-coordinated concept is more specific than the query, the item requires
+  post-coordination. Do not retry search.
+
 ---
 
 ## STEP 4 — DECIDE
@@ -110,12 +118,22 @@ Returns HAS_ROLE edges. Non-empty → pre-coordinated. Call before accepting any
 **`get_ancestors(sctid, max_depth)`**
 IS_A upward traversal. Use if you need context about a concept's position in the hierarchy.
 
+**`verify_concept_specificity(sctid, query_text)`**
+Checks whether any role value in the concept's logical definition is more specific than
+what the query implies, by traversing each role value's IS-A ancestors in SNOMED.
+Call after `get_logical_definition` when the concept's label and the query use related
+but different clinical terms.
+Returns:
+  `{"verdict": "too_specific" | "compatible",
+    "details": [{"attribute", "concept_value", "ancestor_matching_query", "interpretation"}]}`
+If verdict is `"too_specific"`, return `direct_match: false` immediately.
+
 ---
 
 ## IMPORTANT RULES
 
-- **Maximum tool calls: 8.** Budget: up to 3 searches + 2 logical definition checks
-  + 2 ancestor lookups + buffer.
+- **Maximum tool calls: 10.** Budget: up to 3 searches + 2 logical definition checks
+  + 2 ancestor lookups + 1 specificity check + 1 follow-up search + buffer.
 - **Only return SCTIDs from search results or tool results.** Do not invent IDs.
 - **Qualifier Values and Substances are never direct matches.** If only those are returned,
   the search query needs refinement or direct match is false.
