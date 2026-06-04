@@ -33,6 +33,73 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.evaluation.evaluator import write_csv_rows  # noqa: E402
 
+# ---------------------------------------------------------------------------
+# XLSX writer (openpyxl)
+# ---------------------------------------------------------------------------
+
+# Columns whose cells are merged vertically across all rows sharing the same SPL
+_MERGE_COLS = {"SPL_SET_ID", "product_name", "contraindication_text"}
+
+
+def _spl_key(row: dict) -> tuple:
+    return (row.get("SPL_SET_ID", ""), row.get("product_name", ""),
+            row.get("contraindication_text", ""))
+
+
+def _write_xlsx(output_path: str, rows: list[dict], fieldnames: list[str]) -> None:
+    """Write rows to an Excel workbook with merged cells for SPL-level fields."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+
+    wb = Workbook()
+    ws = wb.active
+
+    # ── Header row (bold, frozen) ─────────────────────────────────────────
+    for col_idx, name in enumerate(fieldnames, 1):
+        cell = ws.cell(row=1, column=col_idx, value=name)
+        cell.font = Font(bold=True)
+    ws.freeze_panes = "A2"
+
+    # ── Data rows ─────────────────────────────────────────────────────────
+    # Write actual values for merge columns (not blank — merging handles display)
+    for row_idx, row in enumerate(rows, 2):
+        for col_idx, name in enumerate(fieldnames, 1):
+            ws.cell(row=row_idx, column=col_idx, value=row.get(name, ""))
+
+    # ── Merge cells for SPL-level header columns ──────────────────────────
+    merge_col_indices = [
+        i + 1 for i, name in enumerate(fieldnames) if name in _MERGE_COLS
+    ]
+
+    if rows:
+        group_start = 2  # 1-indexed worksheet row of current group's first data row
+        for i in range(1, len(rows) + 1):
+            is_last = (i == len(rows))
+            same_group = (not is_last) and (_spl_key(rows[i]) == _spl_key(rows[i - 1]))
+            if not same_group:
+                group_end = i + 1  # worksheet row index (data starts at row 2)
+                if group_end > group_start:  # group spans multiple rows → merge
+                    for col in merge_col_indices:
+                        ws.merge_cells(
+                            start_row=group_start, end_row=group_end,
+                            start_column=col, end_column=col,
+                        )
+                        merged_cell = ws.cell(row=group_start, column=col)
+                        merged_cell.alignment = Alignment(
+                            vertical="center", wrap_text=True
+                        )
+                group_start = group_end + 1
+
+    # ── Column widths ─────────────────────────────────────────────────────
+    for col_idx, name in enumerate(fieldnames, 1):
+        col_letter = ws.cell(row=1, column=col_idx).column_letter
+        ws.column_dimensions[col_letter].width = (
+            80 if name == "contraindication_text" else 30
+        )
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    wb.save(output_path)
+
 # (SLOT_TO_ATTR removed — fills slot is always empty; refinements are read from
 #  trace.postcoord_pattern.refinements instead)
 
@@ -202,19 +269,22 @@ def convert(
             for item in spl.get("results") or []:
                 rows.append(_item_to_row(item, spl, fsn_lookup))
 
-    # Blank SPL_SET_ID / product_name / contraindication_text on repeated rows so the
-    # shared header fields appear only once per SPL group (display formatting only).
-    _BLANK_FIELDS = ("SPL_SET_ID", "product_name", "contraindication_text")
-    last_key: tuple = ()
-    for row in rows:
-        key = (row["SPL_SET_ID"], row["product_name"], row["contraindication_text"])
-        if key == last_key:
-            for f in _BLANK_FIELDS:
-                row[f] = ""
-        else:
-            last_key = key
+    if output_path.lower().endswith(".xlsx"):
+        # XLSX: merge cells handle display — no blanking needed
+        _write_xlsx(output_path, rows, FIELDNAMES)
+    else:
+        # CSV: blank repeated SPL-level fields so each group header appears once
+        _BLANK_FIELDS = ("SPL_SET_ID", "product_name", "contraindication_text")
+        last_key: tuple = ()
+        for row in rows:
+            key = (row["SPL_SET_ID"], row["product_name"], row["contraindication_text"])
+            if key == last_key:
+                for f in _BLANK_FIELDS:
+                    row[f] = ""
+            else:
+                last_key = key
+        write_csv_rows(output_path, rows, FIELDNAMES)
 
-    write_csv_rows(output_path, rows, FIELDNAMES)
     return len(rows)
 
 
@@ -249,7 +319,7 @@ def main() -> None:
         print(f"ERROR: input file not found: {input_path}", file=sys.stderr)
         sys.exit(1)
 
-    output_path = args.output or str(input_path.with_suffix(".csv"))
+    output_path = args.output or str(input_path.with_suffix(".xlsx"))
 
     # Build FSN lookup unless suppressed
     fsn_lookup: dict[int, str] | None = None
